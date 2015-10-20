@@ -101,7 +101,51 @@ int parse_ev(FILE * in, FILE * out)
 				if(inmain==1) {basedelay += (getc(in)<<8) + getc(in);}
 				else {delay += (getc(in)<<8) + getc(in);}
 			}
-			else if(ev==0xB8) fseek(in,2,SEEK_CUR);
+			else if(ev==0xB8)
+			{
+				if(delay<=0x7F)
+				{
+					putc(delay,out);
+					tracksz[tracknum]+=4;
+				}
+				else if(delay<=0x3FFF)
+				{
+					putc(0x80+(delay>>7),out);
+					putc(delay&0x7F,out);
+					tracksz[tracknum]+=5;
+				}
+				else if(delay<=0x1FFFFF)
+				{
+					putc(0x80+(delay>>14),out);
+					putc(0x80+((delay>>7)&0x7F),out);
+					putc(delay&0x7F,out);
+					tracksz[tracknum]+=6;
+				}
+				else if(delay<=0xFFFFFFF)
+				{
+					putc(0x80+(delay>>21),out);
+					putc(0x80+((delay>>14)&0x7F),out);
+					putc(0x80+((delay>>7)&0x7F),out);
+					putc(delay&0x7F,out);
+					tracksz[tracknum]+=7;
+				}
+				int modus = getc(in);
+				if(modus==0)
+				{
+					putc(0xB0,out);
+					putc(7,out);
+					char writeme = getc(in);
+					putc(writeme,out);
+				}
+				else if(modus==3)
+				{
+					putc(0xB0,out);
+					putc(10,out);
+					char writeme = getc(in);
+					putc(writeme,out);
+				}
+				else fseek(in,1,SEEK_CUR);
+			}
 			else if(ev==0xB9) fseek(in,3,SEEK_CUR);
 			else if(ev==0xC1) return BR_C1;
 			else if(ev==0xC2) fseek(in,1,SEEK_CUR);
@@ -129,6 +173,7 @@ int parse_ev(FILE * in, FILE * out)
 			else if(ev==0xD8) fseek(in,3,SEEK_CUR);
 			else if(ev==0xD9) fseek(in,3,SEEK_CUR);
 			else if(ev==0xDA) fseek(in,4,SEEK_CUR);
+			else if(ev==0xE0) fseek(in,2,SEEK_CUR);
 			else if(ev==0xE2) fseek(in,1,SEEK_CUR);
 			else if(ev==0xE3) fseek(in,1,SEEK_CUR);
 			else if(ev==0xF0)
@@ -144,7 +189,6 @@ int parse_ev(FILE * in, FILE * out)
 				if(inmain==1) basedelay += value;
 				else delay += value;
 			}
-			else if(ev==0xE0) fseek(in,2,SEEK_CUR);
 			else if(ev==0xF9) fseek(in,2,SEEK_CUR);
 			//else if(ev==0xFD);
 			else if(ev==0xFF) return BR_FF;
@@ -159,6 +203,9 @@ int main(int argc, char ** argv)
 	/*for DKJB BMS files*/
 	fseek(fp,3,SEEK_SET);
 	int initial = (getc(fp)<<8) + getc(fp);
+	fseek(fp,11,SEEK_SET);
+	int bpm = getc(fp);
+	bpm = 60000000/bpm;
 	fseek(fp,initial,SEEK_SET);
 	/*~~~~~~~~~~~~~~~~~~*/
 	while(true)
@@ -217,6 +264,13 @@ int main(int argc, char ** argv)
 		putc((tracksz[i]&0xFF0000)>>16,fp2);
 		putc((tracksz[i]&0xFF00)>>8,fp2);
 		putc(tracksz[i]&0xFF,fp2);
+		putc(0,fp2);
+		putc(0xFF,fp2);
+		putc(0x51,fp2);
+		putc(3,fp2);
+		putc((bpm&0xFF0000)>>16,fp2);
+		putc((bpm&0xFF00)>>8,fp2);
+		putc(bpm&0xFF,fp2);
 		for(int j=0; j<tracksz[i]; j++)
 		{
 			int w = getc(out);
