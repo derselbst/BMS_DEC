@@ -1,7 +1,7 @@
 #include <stdio.h>
 
-int notes[8];
-int tracknum=0;
+unsigned char notes[8];
+unsigned char tracknum=0;
 int delay=0;
 int basedelay=0;
 int tracksz[16]={0};
@@ -35,32 +35,60 @@ unsigned char midi_status_note_off(unsigned char chan)
     return chan;
 }
 
+unsigned long long to_var_len(unsigned long long value)
+{
+    unsigned long long buffer;
+
+    buffer = value & 0x7f;
+
+    while((value >>= 7)>0)
+    {
+        buffer<<= 8;
+        buffer |= 0x80;
+        buffer += (value&0x7f);
+    }
+
+    return buffer;
+}
+
+void write_var_len(unsigned long long value, FILE* out)
+{
+    unsigned long long buffer = to_var_len(value);
+
+    while(1)
+    {
+        putc(buffer, out);
+        if(buffer&0x80)
+        {
+            buffer >>=8;
+        }
+        else
+        {
+            break;
+        }
+    }
+}
+
 void handle_delay(FILE * out)
 {
 				if(delay<=0x7F)
 				{
-					putc(delay,out);
+					write_var_len(delay,out);
 					tracksz[tracknum]+=4;
 				}
 				else if(delay<=0x3FFF)
 				{
-					putc(0x80+(delay>>7),out);
-					putc(delay&0x7F,out);
+                    write_var_len(delay,out);
 					tracksz[tracknum]+=5;
 				}
 				else if(delay<=0x1FFFFF)
 				{
-					putc(0x80+(delay>>14),out);
-					putc(0x80+((delay>>7)&0x7F),out);
-					putc(delay&0x7F,out);
+                    write_var_len(delay,out);
 					tracksz[tracknum]+=6;
 				}
 				else if(delay<=0xFFFFFFF)
 				{
-					putc(0x80+(delay>>21),out);
-					putc(0x80+((delay>>14)&0x7F),out);
-					putc(0x80+((delay>>7)&0x7F),out);
-					putc(delay&0x7F,out);
+                    write_var_len(delay,out);
 					tracksz[tracknum]+=7;
 				}
 }
@@ -91,7 +119,7 @@ int parse_ev(FILE * in, FILE * out)
    			    handle_delay(out);
 
 				putc(midi_status_note_off(tracknum),out);
-				int note = notes[ev&7];
+				unsigned char note = notes[ev&7];
 				putc(note,out);
 				putc(0,out);
 				delay=0;
@@ -228,19 +256,21 @@ int main(int argc, char ** argv)
 	putc(120,midi_file);
 
 	// write tracks
+
+    out = fopen("TEMP","rb");
 	for(int i=0; i<tracknum; i++)
 	{
 		putc('M',midi_file);
 		putc('T',midi_file);
 		putc('r',midi_file);
 		putc('k',midi_file);
+
+		// track chunk length - bigEndian
 		putc(0,midi_file);
 		putc((tracksz[i]&0xFF0000)>>16,midi_file);
 		putc((tracksz[i]&0xFF00)>>8,midi_file);
 		putc(tracksz[i]&0xFF,midi_file);
 
-
-        out = fopen("TEMP","rb");
 		for(int j=0; j<tracksz[i]; j++)
 		{
 			int w = getc(out);
