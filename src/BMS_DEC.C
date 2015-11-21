@@ -130,7 +130,24 @@ int parse_ev(FILE * in, FILE * out)
 				else {delay += (getc(in)<<8) + getc(in);}
 			}
 			else if(ev==0x98) fseek(in,2,SEEK_CUR);
-			else if(ev==0x9A) fseek(in,3,SEEK_CUR);
+			else if(ev==0x9A)
+			{
+			    ev = getc(in);
+
+                if(ev==0x03)
+                {
+                    // could this be pan position???
+                    // from 00 (fully left) to 7F (fully right pan) ??
+                    unsigned char pan_position = getc(in);
+
+                    // always 0x0A ???
+                    unsigned char dontknow = getc(in);
+                }
+                else
+                {
+                    fseek(in,2,SEEK_CUR);
+                }
+			}
 			else if(ev==0x9C) fseek(in,3,SEEK_CUR);
 			else if(ev==0x9E) fseek(in,4,SEEK_CUR);
 			else if(ev==0xA0) fseek(in,2,SEEK_CUR);
