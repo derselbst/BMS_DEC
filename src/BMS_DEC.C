@@ -130,7 +130,7 @@ int parse_ev(FILE * in, FILE * out)
 				else {delay += (getc(in)<<8) + getc(in);}
 			}
 			else if(ev==0x98) fseek(in,2,SEEK_CUR);
-			else if(ev==0x9A)
+			else if(ev==0x9A) // potential pan_position event
 			{
 			    ev = getc(in);
 
@@ -148,7 +148,29 @@ int parse_ev(FILE * in, FILE * out)
                     fseek(in,2,SEEK_CUR);
                 }
 			}
-			else if(ev==0x9C) fseek(in,3,SEEK_CUR);
+			else if(ev==0x9C) // potential volume change?? BlueDemo.bms (=Bogmire Intro) might be a good place to verify
+            {
+                ev = getc(in);
+
+                if(ev==0x00) // always 0x00 in case of volume change ???
+                {
+                    // volume?
+                    // up to 7F!
+                    unsigned char volume = getc(in);
+
+                    // always 0x00 ???
+                    unsigned char dontknow = getc(in);
+                }
+                else if(ev==0x09)
+                {
+                    // unknown, seen in GoodNight.bms
+                    fseek(in,2,SEEK_CUR);
+                }
+                else // dont know
+                {
+                    fseek(in,2,SEEK_CUR);
+                }
+            }
 			else if(ev==0x9E) fseek(in,4,SEEK_CUR);
 			else if(ev==0xA0) fseek(in,2,SEEK_CUR);
 			else if(ev==0xA3) fseek(in,2,SEEK_CUR);
