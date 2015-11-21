@@ -15,11 +15,8 @@ enum branch
 	BR_FF
 };
 
-int parse_ev(FILE * in, FILE * out)
+void handle_delay(FILE * out)
 {
-			int ev = getc(in);
-			if(ev<0x80)
-			{
 				if(delay<=0x7F)
 				{
 					putc(delay,out);
@@ -46,6 +43,15 @@ int parse_ev(FILE * in, FILE * out)
 					putc(delay&0x7F,out);
 					tracksz[tracknum]+=7;
 				}
+}
+
+int parse_ev(FILE * in, FILE * out)
+{
+			int ev = getc(in);
+			if(ev<0x80)
+			{
+			    handle_delay(out);
+
 				putc(0x90,out);
 				int note = ev;
 				putc(note,out);
@@ -62,32 +68,8 @@ int parse_ev(FILE * in, FILE * out)
 			}
 			else if(ev<0x88)
 			{
-				if(delay<=0x7F)
-				{
-					putc(delay,out);
-					tracksz[tracknum]+=4;
-				}
-				else if(delay<=0x3FFF)
-				{
-					putc(0x80+(delay>>7),out);
-					putc(delay&0x7F,out);
-					tracksz[tracknum]+=5;
-				}
-				else if(delay<=0x1FFFFF)
-				{
-					putc(0x80+(delay>>14),out);
-					putc(0x80+((delay>>7)&0x7F),out);
-					putc(delay&0x7F,out);
-					tracksz[tracknum]+=6;
-				}
-				else if(delay<=0xFFFFFFF)
-				{
-					putc(0x80+(delay>>21),out);
-					putc(0x80+((delay>>14)&0x7F),out);
-					putc(0x80+((delay>>7)&0x7F),out);
-					putc(delay&0x7F,out);
-					tracksz[tracknum]+=7;
-				}
+   			    handle_delay(out);
+
 				putc(0x80,out);
 				int note = notes[ev&7];
 				putc(note,out);
