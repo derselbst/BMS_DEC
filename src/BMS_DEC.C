@@ -234,8 +234,18 @@ int parse_ev(FILE * in, FILE * out)
 			return BR_NORMAL;
 }
 
+void usage(char* progName)
+{
+  printf("Usage: %s in.bms out.midi\n", progName);
+}
+
 int main(int argc, char ** argv)
 {
+  if(argc != 3)
+  {
+    usage(argv[0]);
+    return -1;
+  }
 	FILE * fp = fopen(argv[1],"rb");
 	FILE * out = fopen("TEMP","wb");
 	while(true)
