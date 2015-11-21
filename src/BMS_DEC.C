@@ -15,6 +15,26 @@ enum branch
 	BR_FF
 };
 
+unsigned char midi_status_note_on(unsigned char chan)
+{
+    // only lower nibble for channel specification
+    chan &= 0b00001111;
+
+    chan |= 0b1001 << 4;
+
+    return chan;
+}
+
+unsigned char midi_status_note_off(unsigned char chan)
+{
+    // only lower nibble for channel specification
+    chan &= 0b00001111;
+
+    chan |= 0b1000 << 4;
+
+    return chan;
+}
+
 void handle_delay(FILE * out)
 {
 				if(delay<=0x7F)
@@ -48,16 +68,16 @@ void handle_delay(FILE * out)
 int parse_ev(FILE * in, FILE * out)
 {
 			int ev = getc(in);
-			if(ev<0x80)
+			if(ev<0x80) // note on
 			{
 			    handle_delay(out);
 
-				putc(0x90,out);
-				int note = ev;
+				putc(midi_status_note_on(tracknum),out);
+				unsigned char note = ev & 0xFF;
 				putc(note,out);
 				int ppid = getc(in);
 				notes[ppid]=note;
-				int vol = getc(in);
+				unsigned char vol = getc(in);
 				putc(vol,out);
 				delay=0;
 			}
@@ -66,11 +86,11 @@ int parse_ev(FILE * in, FILE * out)
 				if(inmain==1) basedelay+=getc(in);
 				else delay+=getc(in);
 			}
-			else if(ev<0x88)
+			else if(ev<0x88) // note off
 			{
    			    handle_delay(out);
 
-				putc(0x80,out);
+				putc(midi_status_note_off(tracknum),out);
 				int note = notes[ev&7];
 				putc(note,out);
 				putc(0,out);
@@ -151,7 +171,6 @@ int main(int argc, char ** argv)
 {
 	FILE * fp = fopen(argv[1],"rb");
 	FILE * out = fopen("TEMP","wb");
-	FILE * fp2 = fopen(argv[2],"wb");
 	while(true)
 	{
 		int status = parse_ev(fp,out);
@@ -183,38 +202,52 @@ int main(int argc, char ** argv)
 	}
 	fclose(fp);
 	fclose(out);
-	out = fopen("TEMP","rb");
-	putc('M',fp2);
-	putc('T',fp2);
-	putc('h',fp2);
-	putc('d',fp2);
-	putc(0,fp2);
-	putc(0,fp2);
-	putc(0,fp2);
-	putc(6,fp2);
-	putc(0,fp2);
-	putc(1,fp2);
-	putc(0,fp2);
-	putc(tracknum,fp2);
-	putc(0,fp2);
-	putc(120,fp2);
+
+	FILE * midi_file = fopen(argv[2],"wb");
+	putc('M',midi_file);
+	putc('T',midi_file);
+	putc('h',midi_file);
+	putc('d',midi_file);
+
+	// midi header length
+	putc(0,midi_file);
+	putc(0,midi_file);
+	putc(0,midi_file);
+	putc(6,midi_file);
+
+    // SMF1
+	putc(0,midi_file);
+	putc(1,midi_file);
+
+	// number of tracks
+	putc(0,midi_file);
+	putc(tracknum,midi_file);
+
+	// 120 BPM
+	putc(0,midi_file);
+	putc(120,midi_file);
+
+	// write tracks
 	for(int i=0; i<tracknum; i++)
 	{
-		putc('M',fp2);
-		putc('T',fp2);
-		putc('r',fp2);
-		putc('k',fp2);
-		putc(0,fp2);
-		putc((tracksz[i]&0xFF0000)>>16,fp2);
-		putc((tracksz[i]&0xFF00)>>8,fp2);
-		putc(tracksz[i]&0xFF,fp2);
+		putc('M',midi_file);
+		putc('T',midi_file);
+		putc('r',midi_file);
+		putc('k',midi_file);
+		putc(0,midi_file);
+		putc((tracksz[i]&0xFF0000)>>16,midi_file);
+		putc((tracksz[i]&0xFF00)>>8,midi_file);
+		putc(tracksz[i]&0xFF,midi_file);
+
+
+        out = fopen("TEMP","rb");
 		for(int j=0; j<tracksz[i]; j++)
 		{
 			int w = getc(out);
-			putc(w,fp2);
+			putc(w,midi_file);
 		}
 	}
-	fclose(fp2);
+	fclose(midi_file);
 	fclose(out);
 	return 0;
 }
