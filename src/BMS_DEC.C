@@ -224,6 +224,13 @@ int main(int argc, char ** argv)
 				delay=basedelay;
 				fseek(fp,savepos,SEEK_SET);
 				tracknum++;
+
+				if(tracknum >=16)
+                {
+                    fprintf(stderr, "Error: BMS contains more than 16 tracks! Exiting.");
+                    return -1;
+                }
+
 				inmain=1;
 			}
 		}
