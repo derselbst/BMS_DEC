@@ -234,7 +234,7 @@ int parse_ev(FILE * in, FILE * out)
     else if(ev==0xF1) fseek(in,1,SEEK_CUR);
     else if(ev==0xF4) fseek(in,1,SEEK_CUR);
     else if(ev==0xF9) fseek(in,2,SEEK_CUR);
-    else if(ev==0xFD) fseek(in,2,SEEK_CUR);
+    else if(ev==0xFD) fseek(in,2/*could be an int16 (bigEndian?)*/,SEEK_CUR);
     else if(ev==0xFE) fseek(in,2,SEEK_CUR);
     else if(ev==0xFF) return BR_FF;
     return BR_NORMAL;
