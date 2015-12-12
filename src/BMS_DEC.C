@@ -56,6 +56,16 @@ unsigned char midi_status_prog_change(unsigned char chan)
     return chan;
 }
 
+unsigned char midi_status_control_change(unsigned char chan)
+{
+    // only lower nibble for channel specification
+    chan &= 0b00001111;
+
+    chan |= 0b1011 << 4;
+
+    return chan;
+}
+
 unsigned long long to_var_len(unsigned long long value)
 {
     unsigned long long buffer;
@@ -167,11 +177,20 @@ int parse_ev(FILE * in, FILE * out)
 
         if(ev==0x03) // pan position change event!
         {
+	  handle_delay(out);
+	  
             // from 00 (fully left) to 7F (fully right pan)
             unsigned char pan_position = getc(in);
 
             // always 0x0A ???
             unsigned char dontknow = getc(in);
+	    
+	    putc(midi_status_control_change(tracknum), out);
+	    putc(0x0A, out);
+	    putc(pan_position&0x7f, out);
+	    
+	    delay=0;
+	tracksz[tracknum]+=3;
         }
         else
         {
@@ -218,6 +237,8 @@ int parse_ev(FILE * in, FILE * out)
 	unsigned char dontknow = getc(in);
 	
 	putc(midi_status_pitch_wheel(tracknum), out);
+	
+	// TODO: before writing to file, correctly convert pitch value
         putc(pitch&0x7f,out);
 	putc((pitch>>8)&0x7f,out);
 	
