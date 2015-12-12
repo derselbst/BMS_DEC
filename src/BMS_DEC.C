@@ -136,14 +136,13 @@ int parse_ev(FILE * in, FILE * out)
         }
     }
     else if(ev==0x98) fseek(in,2,SEEK_CUR);
-    else if(ev==0x9A) // potential pan_position event
+    else if(ev==0x9A)
     {
         ev = getc(in);
 
-        if(ev==0x03)
+        if(ev==0x03) // pan position change event!
         {
-            // could this be pan position???
-            // from 00 (fully left) to 7F (fully right pan) ??
+            // from 00 (fully left) to 7F (fully right pan)
             unsigned char pan_position = getc(in);
 
             // always 0x0A ???
@@ -154,11 +153,11 @@ int parse_ev(FILE * in, FILE * out)
             fseek(in,2,SEEK_CUR);
         }
     }
-    else if(ev==0x9C) // volume change! (used BlueDemo.bms (=Bogmire Intro) and Title to verify)
+    else if(ev==0x9C)
     {
         ev = getc(in);
 
-        if(ev==0x00) // seems to be always 0x00 in case of volume change
+        if(ev==0x00) // volume change! (used BlueDemo.bms (=Bogmire Intro) and Title to verify)
         {
             // this can be compared to what "Expression" in MIDI is used for, dont know wether there is another preamp volume event in BMS
             // up to 7F!
@@ -167,10 +166,13 @@ int parse_ev(FILE * in, FILE * out)
             // always 0x00
             unsigned char dontknow = getc(in);
         }
-        else if(ev==0x09)
+        else if(ev==0x09) // vibratio intensity event?
         {
-            // unknown, seen in GoodNight.bms
-            fseek(in,2,SEEK_CUR);
+            // scale yet unknown
+            unsigned char vib = getc(in);
+
+            // usually 0x00, can be 0x80
+            unsigned char dontknow = getc(in);
         }
         else // dont know
         {
