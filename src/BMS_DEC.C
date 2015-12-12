@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdint.h>
 
 unsigned char notes[8];
 unsigned char tracknum=0;
@@ -31,6 +32,26 @@ unsigned char midi_status_note_off(unsigned char chan)
     chan &= 0b00001111;
 
     chan |= 0b1000 << 4;
+
+    return chan;
+}
+
+unsigned char midi_status_pitch_wheel(unsigned char chan)
+{
+    // only lower nibble for channel specification
+    chan &= 0b00001111;
+
+    chan |= 0b1110 << 4;
+
+    return chan;
+}
+
+unsigned char midi_status_prog_change(unsigned char chan)
+{
+    // only lower nibble for channel specification
+    chan &= 0b00001111;
+
+    chan |= 0b1100 << 4;
 
     return chan;
 }
@@ -95,7 +116,7 @@ void handle_delay(FILE * out)
 
 int parse_ev(FILE * in, FILE * out)
 {
-    int ev = getc(in);
+    unsigned char ev = getc(in);
     if(ev<0x80) // note on
     {
         handle_delay(out);
@@ -166,23 +187,71 @@ int parse_ev(FILE * in, FILE * out)
             // always 0x00
             unsigned char dontknow = getc(in);
         }
-        else if(ev==0x09) // vibratio intensity event?
+        else if(ev==0x09) // vibrato intensity event? pitch sensitivity event??
         {
             // scale yet unknown
-            unsigned char vib = getc(in);
+            unsigned char somethingWithPitch = getc(in);
 
-            // usually 0x00, can be 0x80
+            // usually 0x00, but can be pretty much anything
             unsigned char dontknow = getc(in);
         }
-        else // dont know
+        else
         {
             fseek(in,2,SEEK_CUR);
         }
     }
-    else if(ev==0x9E) fseek(in,4,SEEK_CUR);
+    else if(ev==0x9E)
+    {
+      ev = getc(in);
+      
+      if(ev==0x01) // pitch event
+      {
+        handle_delay(out);
+	
+	int16_t pitch = (getc(in) << 8) | getc(in); // TODO: verify the this is correct byte order
+	
+	// always 0x04??
+	unsigned char dontknow = getc(in);
+	
+	putc(midi_status_pitch_wheel(tracknum), out);
+        putc(pitch&0x7f,out);
+	putc((pitch>>8)&0x7f,out);
+	
+      }
+      else
+      {
+	fseek(in,3,SEEK_CUR);
+      }
+    }
     else if(ev==0xA0) fseek(in,2,SEEK_CUR);
     else if(ev==0xA3) fseek(in,2,SEEK_CUR);
-    else if(ev==0xA4) fseek(in,2,SEEK_CUR);
+    else if(ev==0xA4)
+    {
+      ev = getc(in);
+      
+      if(ev==0x21) // instrument/program change event
+      {
+        handle_delay(out);
+	
+	// scale yet unknown
+	unsigned char program = getc(in);
+	
+	putc(midi_status_prog_change(tracknum), out);
+        putc(program&0x7f,out);
+      }
+      else if(ev==0x20) // bank selection (pretty sure)
+      {
+	unsigned char bank = getc(in);
+      }
+      else if(ev==0x07)
+      {
+	//DOnt know
+      }
+      else
+      {
+      fseek(in,1,SEEK_CUR);
+      }
+    }
     else if(ev==0xA5) fseek(in,2,SEEK_CUR);
     else if(ev==0xA7) fseek(in,2,SEEK_CUR);
     else if(ev==0xA9) fseek(in,4,SEEK_CUR);
