@@ -95,22 +95,22 @@ void handle_delay(FILE * out)
     if(delay<=0x7F)
     {
         write_var_len(delay,out);
-        tracksz[tracknum]+=4;
+        tracksz[tracknum]+=1;
     }
     else if(delay<=0x3FFF)
     {
         write_var_len(delay,out);
-        tracksz[tracknum]+=5;
+        tracksz[tracknum]+=2;
     }
     else if(delay<=0x1FFFFF)
     {
         write_var_len(delay,out);
-        tracksz[tracknum]+=6;
+        tracksz[tracknum]+=3;
     }
     else if(delay<=0xFFFFFFF)
     {
         write_var_len(delay,out);
-        tracksz[tracknum]+=7;
+        tracksz[tracknum]+=4;
     }
 }
 
@@ -128,7 +128,9 @@ int parse_ev(FILE * in, FILE * out)
         notes[ppid]=note;
         unsigned char vol = getc(in);
         putc(vol,out);
+	
         delay=0;
+	tracksz[tracknum]+=3;
     }
     else if(ev==0x80)
     {
@@ -143,7 +145,9 @@ int parse_ev(FILE * in, FILE * out)
         unsigned char note = notes[ev&7];
         putc(note,out);
         putc(0,out);
+	
         delay=0;
+	tracksz[tracknum]+=3;
     }
     else if(ev==0x88)
     {
@@ -217,6 +221,8 @@ int parse_ev(FILE * in, FILE * out)
         putc(pitch&0x7f,out);
 	putc((pitch>>8)&0x7f,out);
 	
+	delay=0;
+	tracksz[tracknum]+=3;
       }
       else
       {
@@ -238,6 +244,9 @@ int parse_ev(FILE * in, FILE * out)
 	
 	putc(midi_status_prog_change(tracknum), out);
         putc(program&0x7f,out);
+	
+	delay=0;
+	tracksz[tracknum]+=2;
       }
       else if(ev==0x20) // bank selection (pretty sure)
       {
@@ -246,6 +255,7 @@ int parse_ev(FILE * in, FILE * out)
       else if(ev==0x07)
       {
 	//DOnt know
+	fseek(in,1,SEEK_CUR);
       }
       else
       {
@@ -352,7 +362,7 @@ int main(int argc, char ** argv)
                 fseek(fp,savepos,SEEK_SET);
                 tracknum++;
 
-                if(tracknum >=16)
+                if(tracknum > 16)
                 {
                     fprintf(stderr, "Error: BMS contains more than 16 tracks! Exiting.");
                     return -1;
