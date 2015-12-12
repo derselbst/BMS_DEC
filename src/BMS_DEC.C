@@ -154,17 +154,17 @@ int parse_ev(FILE * in, FILE * out)
             fseek(in,2,SEEK_CUR);
         }
     }
-    else if(ev==0x9C) // potential volume change?? BlueDemo.bms (=Bogmire Intro) might be a good place to verify
+    else if(ev==0x9C) // volume change! (used BlueDemo.bms (=Bogmire Intro) and Title to verify)
     {
         ev = getc(in);
 
-        if(ev==0x00) // always 0x00 in case of volume change ???
+        if(ev==0x00) // seems to be always 0x00 in case of volume change
         {
-            // volume?
+            // this can be compared to what "Expression" in MIDI is used for, dont know wether there is another preamp volume event in BMS
             // up to 7F!
             unsigned char volume = getc(in);
 
-            // always 0x00 ???
+            // always 0x00
             unsigned char dontknow = getc(in);
         }
         else if(ev==0x09)
