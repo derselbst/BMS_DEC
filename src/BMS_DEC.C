@@ -203,12 +203,21 @@ int parse_ev(FILE * in, FILE * out)
 
         if(ev==0x00) // volume change! (used BlueDemo.bms (=Bogmire Intro) and Title to verify)
         {
+	  handle_delay(out);
+	  
             // this can be compared to what "Expression" in MIDI is used for, dont know wether there is another preamp volume event in BMS
             // up to 7F!
             unsigned char volume = getc(in);
 
             // always 0x00
             unsigned char dontknow = getc(in);
+	    
+	    putc(midi_status_control_change(tracknum), out);
+	    putc(0x07, out); //TODO: unsure whether using expression instead of volume change
+	    putc(volume&0x7f, out);
+	    
+	    delay=0;
+	tracksz[tracknum]+=3;
         }
         else if(ev==0x09) // vibrato intensity event? pitch sensitivity event??
         {
