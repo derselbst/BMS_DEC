@@ -138,9 +138,9 @@ int parse_ev(FILE * in, FILE * out)
         notes[ppid]=note;
         unsigned char vol = getc(in);
         putc(vol,out);
-	
+
         delay=0;
-	tracksz[tracknum]+=3;
+        tracksz[tracknum]+=3;
     }
     else if(ev==0x80)
     {
@@ -155,9 +155,9 @@ int parse_ev(FILE * in, FILE * out)
         unsigned char note = notes[ev&7];
         putc(note,out);
         putc(0,out);
-	
+
         delay=0;
-	tracksz[tracknum]+=3;
+        tracksz[tracknum]+=3;
     }
     else if(ev==0x88)
     {
@@ -177,20 +177,20 @@ int parse_ev(FILE * in, FILE * out)
 
         if(ev==0x03) // pan position change event!
         {
-	  handle_delay(out);
-	  
+            handle_delay(out);
+
             // from 00 (fully left) to 7F (fully right pan)
             unsigned char pan_position = getc(in);
 
             // always 0x0A ???
             unsigned char dontknow = getc(in);
-	    
-	    putc(midi_status_control_change(tracknum), out);
-	    putc(0x0A, out);
-	    putc(pan_position&0x7f, out);
-	    
-	    delay=0;
-	tracksz[tracknum]+=3;
+
+            putc(midi_status_control_change(tracknum), out);
+            putc(0x0A, out);
+            putc(pan_position&0x7f, out);
+
+            delay=0;
+            tracksz[tracknum]+=3;
         }
         else
         {
@@ -203,21 +203,21 @@ int parse_ev(FILE * in, FILE * out)
 
         if(ev==0x00) // volume change! (used BlueDemo.bms (=Bogmire Intro) and Title to verify)
         {
-	  handle_delay(out);
-	  
+            handle_delay(out);
+
             // this can be compared to what "Expression" in MIDI is used for, dont know wether there is another preamp volume event in BMS
             // up to 7F!
             unsigned char volume = getc(in);
 
             // always 0x00
             unsigned char dontknow = getc(in);
-	    
-	    putc(midi_status_control_change(tracknum), out);
-	    putc(0x07, out); //TODO: unsure whether using expression instead of volume change
-	    putc(volume&0x7f, out);
-	    
-	    delay=0;
-	tracksz[tracknum]+=3;
+
+            putc(midi_status_control_change(tracknum), out);
+            putc(0x07, out); //TODO: unsure whether using expression instead of volume change
+            putc(volume&0x7f, out);
+
+            delay=0;
+            tracksz[tracknum]+=3;
         }
         else if(ev==0x09) // vibrato intensity event? pitch sensitivity event??
         {
@@ -234,63 +234,63 @@ int parse_ev(FILE * in, FILE * out)
     }
     else if(ev==0x9E)
     {
-      ev = getc(in);
-      
-      if(ev==0x01) // pitch event
-      {
-        handle_delay(out);
-	
-	int16_t pitch = (getc(in) << 8) | getc(in); // TODO: verify the this is correct byte order
-	
-	// always 0x04??
-	unsigned char dontknow = getc(in);
-	
-	putc(midi_status_pitch_wheel(tracknum), out);
-	
-	// TODO: before writing to file, correctly convert pitch value
-        putc(pitch&0x7f,out);
-	putc((pitch>>8)&0x7f,out);
-	
-	delay=0;
-	tracksz[tracknum]+=3;
-      }
-      else
-      {
-	fseek(in,3,SEEK_CUR);
-      }
+        ev = getc(in);
+
+        if(ev==0x01) // pitch event
+        {
+            handle_delay(out);
+
+            int16_t pitch = (getc(in) << 8) | getc(in); // TODO: verify the this is correct byte order
+
+            // always 0x04??
+            unsigned char dontknow = getc(in);
+
+            putc(midi_status_pitch_wheel(tracknum), out);
+
+            // TODO: before writing to file, correctly convert pitch value
+            putc(pitch&0x7f,out);
+            putc((pitch>>8)&0x7f,out);
+
+            delay=0;
+            tracksz[tracknum]+=3;
+        }
+        else
+        {
+            fseek(in,3,SEEK_CUR);
+        }
     }
     else if(ev==0xA0) fseek(in,2,SEEK_CUR);
     else if(ev==0xA3) fseek(in,2,SEEK_CUR);
     else if(ev==0xA4)
     {
-      ev = getc(in);
-      
-      if(ev==0x21) // instrument/program change event
-      {
-        handle_delay(out);
-	
-	// scale yet unknown
-	unsigned char program = getc(in);
-	
-	putc(midi_status_prog_change(tracknum), out);
-        putc(program&0x7f,out);
-	
-	delay=0;
-	tracksz[tracknum]+=2;
-      }
-      else if(ev==0x20) // bank selection (pretty sure)
-      {
-	unsigned char bank = getc(in);
-      }
-      else if(ev==0x07)
-      {
-	//DOnt know
-	fseek(in,1,SEEK_CUR);
-      }
-      else
-      {
-      fseek(in,1,SEEK_CUR);
-      }
+        ev = getc(in);
+
+        if(ev==0x21) // instrument/program change event
+        {
+            handle_delay(out);
+
+            // scale yet unknown
+            unsigned char program = getc(in);
+
+            putc(midi_status_prog_change(tracknum), out);
+            putc(program&0x7f,out);
+
+            delay=0;
+            tracksz[tracknum]+=2;
+        }
+        else if(ev==0x20) // bank selection (pretty sure)
+        {
+            unsigned char bank = getc(in);
+        }
+        else if(ev==0x07)
+        {
+            //DOnt know
+            fseek(in,1,SEEK_CUR);
+        }
+        else
+        {
+            fseek(in,1,SEEK_CUR);
+        }
     }
     else if(ev==0xA5) fseek(in,2,SEEK_CUR);
     else if(ev==0xA7) fseek(in,2,SEEK_CUR);
