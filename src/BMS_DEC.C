@@ -182,9 +182,14 @@ int parse_ev(FILE * in, FILE * out)
             // from 00 (fully left) to 7F (fully right pan)
             unsigned char pan_position = getc(in);
 
-            // always 0x0A ???
-            unsigned char dontknow = getc(in);
+            // usually 0x0A
+            unsigned char duration = getc(in);
 
+	    if(duration!=0)
+	    {
+	       printf("pan position change duration in track %u is: %u\n", tracknum, duration);
+	    }
+	    
             putc(midi_status_control_change(tracknum), out);
             putc(0x0A, out);
             putc(pan_position&0x7f, out);
@@ -209,9 +214,14 @@ int parse_ev(FILE * in, FILE * out)
             // up to 7F!
             unsigned char volume = getc(in);
 
-            // always 0x00
-            unsigned char dontknow = getc(in);
-
+            // usually 0x00
+            unsigned char duration = getc(in);
+	    
+	    if(duration!=0)
+	    {
+	       printf("volume change duration in track %u is: %u\n", tracknum, duration);
+	    }
+	    
             putc(midi_status_control_change(tracknum), out);
             putc(0x07, out); //TODO: unsure whether using expression instead of volume change
             putc(volume&0x7f, out);
@@ -242,9 +252,14 @@ int parse_ev(FILE * in, FILE * out)
 
             int16_t pitch = (getc(in) << 8) | getc(in); // TODO: verify the this is correct byte order
 
-            // always 0x04??
-            unsigned char dontknow = getc(in);
+            // usually 0x04
+            unsigned char duration = getc(in);
 
+	    if(duration!=0)
+	    {
+	       printf("pitch change duration in track %u is: %u\n", tracknum, duration);
+	    }
+	    
             putc(midi_status_pitch_wheel(tracknum), out);
 
             // TODO: before writing to file, correctly convert pitch value
