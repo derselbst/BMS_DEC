@@ -9,7 +9,8 @@ int tracksz[16]= {0};
 int savepos=0;
 int inmain=1;
 
-uint16_t ppqn=0xFFFF;
+uint16_t ppqn=0;
+uint16_t tempo=0;
 
 enum branch
 {
@@ -362,10 +363,14 @@ int parse_ev(FILE * in, FILE * out)
     else if(ev==0xF1) fseek(in,1,SEEK_CUR);
     else if(ev==0xF4) fseek(in,1,SEEK_CUR);
     else if(ev==0xF9) fseek(in,2,SEEK_CUR);
-    else if(ev==0xFD) fseek(in,2/*could be an int16 (bigEndian?)*/,SEEK_CUR);
+    else if(ev==0xFD)
+    {
+      // TODO: support tempo change throughout track, not just as initialization
+      tempo = (getc(in)<<8) | getc(in);
+    }
     else if(ev==0xFE)
     {
-      if(ppqn==0xFFFF) // unset
+      if(ppqn==0) // unset
       {
       ppqn = (getc(in)<<8) | getc(in);
       }
@@ -453,7 +458,7 @@ int main(int argc, char ** argv)
     putc(tracknum,midi_file);
 
     // ppqn
-    if(ppqn==0xFFFF) // unset
+    if(ppqn==0) // if unset
      {
       puts("BMS doesnt specify PPQN. Defaulting to 96."); 
       ppqn=96;
