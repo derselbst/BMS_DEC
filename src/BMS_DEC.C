@@ -9,6 +9,8 @@ int tracksz[16]= {0};
 int savepos=0;
 int inmain=1;
 
+uint16_t ppqn=0xFFFF;
+
 enum branch
 {
     BR_NORMAL,
@@ -361,7 +363,17 @@ int parse_ev(FILE * in, FILE * out)
     else if(ev==0xF4) fseek(in,1,SEEK_CUR);
     else if(ev==0xF9) fseek(in,2,SEEK_CUR);
     else if(ev==0xFD) fseek(in,2/*could be an int16 (bigEndian?)*/,SEEK_CUR);
-    else if(ev==0xFE) fseek(in,2,SEEK_CUR);
+    else if(ev==0xFE)
+    {
+      if(ppqn==0xFFFF) // unset
+      {
+      ppqn = (getc(in)<<8) | getc(in);
+      }
+      else
+      {
+	puts("PPQN already set and not supported as change event. Ignoring it.");
+      }
+    }
     else if(ev==0xFF) return BR_FF;
     return BR_NORMAL;
 }
@@ -440,9 +452,14 @@ int main(int argc, char ** argv)
     putc(0,midi_file);
     putc(tracknum,midi_file);
 
-    // 120 BPM
-    putc(0,midi_file);
-    putc(120,midi_file);
+    // ppqn
+    if(ppqn==0xFFFF) // unset
+     {
+      puts("BMS doesnt specify PPQN. Defaulting to 96."); 
+      ppqn=96;
+     }
+    putc((ppqn>>8)&0xFF,midi_file);
+    putc(ppqn&0xFF,midi_file);
 
     // write tracks
     out = fopen("TEMP","rb");
