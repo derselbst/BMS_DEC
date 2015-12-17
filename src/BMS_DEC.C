@@ -380,6 +380,10 @@ int parse_ev(FILE * in, FILE * out)
       }
     }
     else if(ev==0xFF) return BR_FF;
+    else
+    {
+    	printf("Warning: Event %d (0x%X) unhandled\n", ev, ev);
+    }
     return BR_NORMAL;
 }
 
