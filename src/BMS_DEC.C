@@ -188,11 +188,11 @@ int parse_ev(FILE * in, FILE * out)
             // usually 0x0A
             unsigned char duration = getc(in);
 
-	    if(duration!=0)
-	    {
-	       printf("pan position change duration in track %u is: %u\n", tracknum, duration);
-	    }
-	    
+            if(duration!=0)
+            {
+                printf("pan position change duration in track %u is: %u\n", tracknum, duration);
+            }
+
             putc(midi_status_control_change(tracknum), out);
             putc(0x0A, out);
             putc(pan_position&0x7f, out);
@@ -219,12 +219,12 @@ int parse_ev(FILE * in, FILE * out)
 
             // usually 0x00
             unsigned char duration = getc(in);
-	    
-	    if(duration!=0)
-	    {
-	       printf("volume change duration in track %u is: %u\n", tracknum, duration);
-	    }
-	    
+
+            if(duration!=0)
+            {
+                printf("volume change duration in track %u is: %u\n", tracknum, duration);
+            }
+
             putc(midi_status_control_change(tracknum), out);
             putc(0x07, out); //TODO: unsure whether using expression instead of volume change
             putc(volume&0x7f, out);
@@ -258,11 +258,11 @@ int parse_ev(FILE * in, FILE * out)
             // usually 0x04
             unsigned char duration = getc(in);
 
-	    if(duration!=0)
-	    {
-	       printf("pitch change duration in track %u is: %u\n", tracknum, duration);
-	    }
-	    
+            if(duration!=0)
+            {
+                printf("pitch change duration in track %u is: %u\n", tracknum, duration);
+            }
+
             putc(midi_status_pitch_wheel(tracknum), out);
 
             // TODO: before writing to file, correctly convert pitch value
@@ -365,31 +365,31 @@ int parse_ev(FILE * in, FILE * out)
     else if(ev==0xF9) fseek(in,2,SEEK_CUR);
     else if(ev==0xFD)
     {
-      // TODO: support tempo change throughout track, not just as initialization
-      if(tempo==0)
-      {
-      tempo = (getc(in)<<8) | getc(in);
-      }
-      else
-      {
-	puts("This BMS is using Tempo Change Events, which is not yet implemented. Please create a feature request by emailing tom[DOT]mbrt[AT]gmail[DOT]com stating with which BMS you experienced this issue.");
-      }
+        // TODO: support tempo change throughout track, not just as initialization
+        if(tempo==0)
+        {
+            tempo = (getc(in)<<8) | getc(in);
+        }
+        else
+        {
+            puts("This BMS is using Tempo Change Events, which is not yet implemented. Please create a feature request by emailing tom[DOT]mbrt[AT]gmail[DOT]com stating with which BMS you experienced this issue.");
+        }
     }
     else if(ev==0xFE)
     {
-      if(ppqn==0) // unset
-      {
-      ppqn = (getc(in)<<8) | getc(in);
-      }
-      else
-      {
-	puts("PPQN already set and not supported as change event. Ignoring it.");
-      }
+        if(ppqn==0) // unset
+        {
+            ppqn = (getc(in)<<8) | getc(in);
+        }
+        else
+        {
+            puts("PPQN already set and not supported as change event. Ignoring it.");
+        }
     }
     else if(ev==0xFF) return BR_FF;
     else
     {
-    	printf("Warning: Event %d (0x%X) unhandled\n", ev, ev);
+        printf("Warning: Event %d (0x%X) unhandled\n", ev, ev);
     }
     return BR_NORMAL;
 }
@@ -470,65 +470,65 @@ int main(int argc, char ** argv)
 
     // ppqn
     if(ppqn==0) // if unset
-     {
-      puts("BMS doesnt specify PPQN. Defaulting to 96."); 
-      ppqn=96;
-     }
+    {
+        puts("BMS doesnt specify PPQN. Defaulting to 96.");
+        ppqn=96;
+    }
     putc((ppqn>>8)&0xFF,midi_file);
     putc(ppqn&0xFF,midi_file);
 
     // write tracks
     out = fopen("TEMP","rb");
-    
+
     if(tempo==0)
     {
         puts("BMS doesnt specify a Tempo. Imply 120 BPM.");
     }
     else
     {
-    // write meta track (i.e. for tempo change only)
-    putc('M',midi_file);
-    putc('T',midi_file);
-    putc('r',midi_file);
-    putc('k',midi_file);
+        // write meta track (i.e. for tempo change only)
+        putc('M',midi_file);
+        putc('T',midi_file);
+        putc('r',midi_file);
+        putc('k',midi_file);
 
-    // tracklength
-    putc(0,midi_file);
-    putc(0,midi_file);
-    putc(0,midi_file);
-    putc(11,midi_file);
-    
-    // 0 delay
-    write_var_len(0,midi_file);
-    // tempo change event
-    putc(0xFF,midi_file);
-    putc(0x51,midi_file);
-    putc(0x03,midi_file);
-    
-    if(tempo<=3)
-    {
-      puts("Tempo slower 4 BPM are not supported by MIDI spec. Setting to slowest possible.");
-      putc(0xFF,midi_file);
-      putc(0xFF,midi_file);
-      putc(0xFF,midi_file);
+        // tracklength
+        putc(0,midi_file);
+        putc(0,midi_file);
+        putc(0,midi_file);
+        putc(11,midi_file);
+
+        // 0 delay
+        write_var_len(0,midi_file);
+        // tempo change event
+        putc(0xFF,midi_file);
+        putc(0x51,midi_file);
+        putc(0x03,midi_file);
+
+        if(tempo<=3)
+        {
+            puts("Tempo slower 4 BPM are not supported by MIDI spec. Setting to slowest possible.");
+            putc(0xFF,midi_file);
+            putc(0xFF,midi_file);
+            putc(0xFF,midi_file);
+        }
+        else // most sig. byte should be 0 so we can write tempo to 3 bytes
+        {
+            // micro seconds per quarter note
+            uint32_t usec_pqn=(uint32_t)((60/(float)tempo) * 1000 * 1000);
+            putc((usec_pqn>>16) & 0xFF,midi_file);
+            putc((usec_pqn>>8) & 0xFF,midi_file);
+            putc((usec_pqn) & 0xFF,midi_file);
+        }
+
+        // 0 delay
+        write_var_len(0,midi_file);
+        // end of track
+        putc(0xFF,midi_file);
+        putc(0x2F,midi_file);
+        putc(0,midi_file);
     }
-    else // most sig. byte should be 0 so we can write tempo to 3 bytes
-    {
-      // micro seconds per quarter note
-      uint32_t usec_pqn=(uint32_t)((60/(float)tempo) * 1000 * 1000);
-      putc((usec_pqn>>16) & 0xFF,midi_file);
-      putc((usec_pqn>>8) & 0xFF,midi_file);
-      putc((usec_pqn) & 0xFF,midi_file);
-    }
-    
-    // 0 delay
-    write_var_len(0,midi_file);
-    // end of track    
-    putc(0xFF,midi_file);
-    putc(0x2F,midi_file);
-    putc(0,midi_file);
-    }
-    
+
     for(int i=0; i<tracknum; i++)
     {
         putc('M',midi_file);
