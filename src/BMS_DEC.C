@@ -472,6 +472,56 @@ int main(int argc, char ** argv)
 
     // write tracks
     out = fopen("TEMP","rb");
+    
+    if(tempo==0)
+    {
+        puts("BMS doesnt specify a Tempo. Imply 120 BPM.");
+    }
+    else
+    {
+    // write meta track (i.e. for tempo change only)
+    putc('M',midi_file);
+    putc('T',midi_file);
+    putc('r',midi_file);
+    putc('k',midi_file);
+
+    // tracklength
+    putc(0,midi_file);
+    putc(0,midi_file);
+    putc(0,midi_file);
+    putc(11,midi_file);
+    
+    // 0 delay
+    write_var_len(0,midi_file);
+    // tempo change event
+    putc(0xFF,midi_file);
+    putc(0x51,midi_file);
+    putc(0x03,midi_file);
+    
+    if(tempo<=3)
+    {
+      puts("Tempo slower 4 BPM are not supported by MIDI spec. Setting to slowest possible.");
+      putc(0xFF,midi_file);
+      putc(0xFF,midi_file);
+      putc(0xFF,midi_file);
+    }
+    else // most sig. byte should be 0 so we can write tempo to 3 bytes
+    {
+      // micro seconds per quarter note
+      uint32_t usec_pqn=(uint32_t)((60/(float)tempo) * 1000 * 1000);
+      putc((usec_pqn>>16) & 0xFF,midi_file);
+      putc((usec_pqn>>8) & 0xFF,midi_file);
+      putc((usec_pqn) & 0xFF,midi_file);
+    }
+    
+    // 0 delay
+    write_var_len(0,midi_file);
+    // end of track    
+    putc(0xFF,midi_file);
+    putc(0x2F,midi_file);
+    putc(0,midi_file);
+    }
+    
     for(int i=0; i<tracknum; i++)
     {
         putc('M',midi_file);
