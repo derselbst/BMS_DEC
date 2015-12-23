@@ -244,10 +244,6 @@ int parse_ev(FILE * in, FILE * out)
     {
         switch(ev)
         {
-        case 0x80:
-            if(inmain==1) basedelay+=getc(in);
-            else delay+=getc(in);
-            break;
         case 0x81:
         case 0x82:
         case 0x83:
@@ -266,6 +262,10 @@ int parse_ev(FILE * in, FILE * out)
             tracksz[tracknum]+=3;
         }
         break;
+        case 0x80:
+            if(inmain==1) basedelay+=getc(in);
+            else delay+=getc(in);
+            break;
         case 0x88:
         {
             if(inmain==1)
@@ -278,9 +278,18 @@ int parse_ev(FILE * in, FILE * out)
             }
         }
         break;
-        case 0x98:
-            fseek(in,2,SEEK_CUR);
-            break;
+        case 0xF0:
+        {
+            int value = getc(in);
+            while(value&0x80)
+            {
+                value=(value&0x7F)<<7;
+                value+=getc(in);
+            }
+            if(inmain==1) basedelay += value;
+            else delay += value;
+        }
+        break;
         case 0x9A:
         {
             ev = getc(in);
@@ -372,11 +381,6 @@ int parse_ev(FILE * in, FILE * out)
             }
         }
         break;
-        case 0xA0:
-        /*fall through*/
-        case 0xA3:
-            fseek(in,2,SEEK_CUR);
-            break;
         case 0xA4:
         {
             ev = getc(in);
@@ -408,20 +412,6 @@ int parse_ev(FILE * in, FILE * out)
             }
         }
         break;
-        case 0xA5:
-        /*fall through*/
-        case 0xA7:
-            fseek(in,2,SEEK_CUR);
-            break;
-        case 0xA9:
-        /*fall through*/
-        case 0xAA:
-            fseek(in,4,SEEK_CUR);
-            break;
-        case 0xAC:
-	case 0xAD:
-            fseek(in,3,SEEK_CUR);
-            break;
         case 0xB1:
         {
             fseek(in,1,SEEK_CUR);
@@ -430,104 +420,89 @@ int parse_ev(FILE * in, FILE * out)
             else if(flag==0x80) fseek(in,4,SEEK_CUR);
         }
         break;
-        case 0xB8:
-            fseek(in,2,SEEK_CUR);
-            break;
-        case 0xC1:
-            return BR_C1;
+
         case 0xC2:
-            fseek(in,1,SEEK_CUR);
-            break;
-        case 0xC4:
-            fseek(in,4,SEEK_CUR);
-            break;
-        case 0xC5:
-            fseek(in,3,SEEK_CUR);
-            break;
+        /*fall through*/
         case 0xC6:
-            fseek(in,1,SEEK_CUR);
-            break;
-        case 0xC7:
-            fseek(in,4,SEEK_CUR);
-            break;
-        case 0xC8:
-            fseek(in,4,SEEK_CUR);
-            break;
-        case 0xCB:
-            fseek(in,2,SEEK_CUR);
-            break;
-        case 0xCC:
-            fseek(in,2,SEEK_CUR);
-            break;
+        /*fall through*/
         case 0xCF:
-            fseek(in,1,SEEK_CUR);
-            break;
-        case 0xD0:
-            fseek(in,2,SEEK_CUR);
-            break;
-        case 0xD1:
-            fseek(in,2,SEEK_CUR);
-            break;
-        case 0xD2:
-            fseek(in,2,SEEK_CUR);
-            break;
-        case 0xD5:
-            fseek(in,2,SEEK_CUR);
-            break;
-        case 0xD8:
-            fseek(in,3,SEEK_CUR); // NEW!
-            break;
+        /*fall through*/
         case 0xDA:
-            fseek(in,1,SEEK_CUR);
-            break;
+        /*fall through*/
         case 0xDB:
-            fseek(in,1,SEEK_CUR);
-            break;
-        case 0xDD:
-            fseek(in,3,SEEK_CUR);
-            break;
-        case 0xDF:
-            fseek(in,4,SEEK_CUR);
-            break;
-        case 0xE0:
-            fseek(in,2,SEEK_CUR); // WAS 3
-            break;
-        case 0xE2:
-            fseek(in,1,SEEK_CUR); // NEW!
-            break;
-        case 0xE3:
-            fseek(in,1,SEEK_CUR); // NEW!
-            break;
-        case 0xE6:
-            fseek(in,2,SEEK_CUR);
-            break;
-        case 0xE7:
-            fseek(in,2,SEEK_CUR);
-            break;
-        case 0xEF:
-            fseek(in,3,SEEK_CUR);
-            break;
-        case 0xF0:
-        {
-            int value = getc(in);
-            while(value&0x80)
-            {
-                value=(value&0x7F)<<7;
-                value+=getc(in);
-            }
-            if(inmain==1) basedelay += value;
-            else delay += value;
-        }
-        break;
+        /*fall through*/
+        case 0xE2: // NEW!
+        /*fall through*/
+        case 0xE3: // NEW!
+        /*fall through*/
         case 0xF1:
-            fseek(in,1,SEEK_CUR);
-            break;
+        /*fall through*/
         case 0xF4:
             fseek(in,1,SEEK_CUR);
             break;
+
+        case 0x98:
+        /*fall through*/
+        case 0xA0:
+        /*fall through*/
+        case 0xA3:
+        /*fall through*/
+        case 0xA5:
+        /*fall through*/
+        case 0xA7:
+        /*fall through*/
+        case 0xB8:
+        /*fall through*/
+        case 0xCB:
+        /*fall through*/
+        case 0xCC:
+        /*fall through*/
+        case 0xD0:
+        /*fall through*/
+        case 0xD1:
+        /*fall through*/
+        case 0xD2:
+        /*fall through*/
+        case 0xD5:
+        /*fall through*/
+        case 0xE0:
+        /*fall through*/
+        case 0xE6:
+        /*fall through*/
+        case 0xE7:
+        /*fall through*/
         case 0xF9:
             fseek(in,2,SEEK_CUR);
             break;
+
+        case 0xAC:
+        /*fall through*/
+        case 0xAD:
+        /*fall through*/
+        case 0xC5:
+        /*fall through*/
+        case 0xD8:// NEW!
+        /*fall through*/
+        case 0xDD:
+        /*fall through*/
+        case 0xEF:
+            fseek(in,3,SEEK_CUR);
+            break;
+
+        case 0xA9:
+        /*fall through*/
+        case 0xAA:
+        /*fall through*/
+        case 0xC4:
+        /*fall through*/
+        case 0xC7:
+        /*fall through*/
+        case 0xC8:
+        /*fall through*/
+        case 0xDF:
+            fseek(in,4,SEEK_CUR);
+            break;
+
         case 0xFD:
         {
             // TODO: support tempo change throughout track, not just as initialization
@@ -555,6 +530,9 @@ int parse_ev(FILE * in, FILE * out)
             }
         }
         break;
+
+        case 0xC1:
+            return BR_C1;
         case 0xFF:
             return BR_FF;
         default:
