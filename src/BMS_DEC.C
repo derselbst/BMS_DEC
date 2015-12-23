@@ -125,6 +125,8 @@ void handle_delay(FILE * out)
         write_var_len(delay,out);
         tracksz[tracknum]+=4;
     }
+    
+    delay=0;
 }
 
 void write_ctrl_interpolation(const ctrl_type, uint8_t const value, uint8_t const duration, FILE* out)
@@ -168,8 +170,6 @@ void write_ctrl_interpolation(const ctrl_type, uint8_t const value, uint8_t cons
 	last_pan = value;
 	break;
     }
-    
-    delay=0;
 }
 
 int parse_ev(FILE * in, FILE * out)
@@ -187,7 +187,6 @@ int parse_ev(FILE * in, FILE * out)
         unsigned char vol = getc(in);
         putc(vol,out);
 
-        delay=0;
         tracksz[tracknum]+=3;
     }
     else if(ev==0x80)
@@ -204,7 +203,6 @@ int parse_ev(FILE * in, FILE * out)
         putc(note,out);
         putc(0,out);
 
-        delay=0;
         tracksz[tracknum]+=3;
     }
     else if(ev==0x88)
@@ -242,7 +240,6 @@ int parse_ev(FILE * in, FILE * out)
             putc(0x0A, out);
             putc(pan_position&0x7f, out);
 
-            delay=0;
             tracksz[tracknum]+=3;
         }
         else
@@ -274,7 +271,6 @@ int parse_ev(FILE * in, FILE * out)
             putc(0x07, out); //TODO: unsure whether using expression instead of volume change
             putc(volume&0x7f, out);
 
-            delay=0;
             tracksz[tracknum]+=3;
         }
         else if(ev==0x09) // vibrato intensity event? pitch sensitivity event??
@@ -314,7 +310,6 @@ int parse_ev(FILE * in, FILE * out)
             putc(pitch&0x7f,out);
             putc((pitch>>8)&0x7f,out);
 
-            delay=0;
             tracksz[tracknum]+=3;
         }
         else
@@ -338,7 +333,6 @@ int parse_ev(FILE * in, FILE * out)
             putc(midi_status_prog_change(tracknum), out);
             putc(program&0x7f,out);
 
-            delay=0;
             tracksz[tracknum]+=2;
         }
         else if(ev==0x20) // bank selection (pretty sure)
