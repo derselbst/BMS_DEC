@@ -372,7 +372,8 @@ int parse_ev(FILE * in, FILE * out)
         }
         else
         {
-            puts("This BMS is using Tempo Change Events, which is not yet implemented. Please create a feature request by emailing tom[DOT]mbrt[AT]gmail[DOT]com stating with which BMS you experienced this issue.");
+            puts("This BMS is using Tempo Change Events, which is not yet implemented.");
+            fseek(in,2,SEEK_CUR);
         }
     }
     else if(ev==0xFE)
