@@ -127,6 +127,51 @@ void handle_delay(FILE * out)
     }
 }
 
+void write_ctrl_interpolation(const ctrl_type, uint8_t const value, uint8_t const duration, FILE* out)
+{
+    static uint8_t last_vol=0;
+    static uint8_t last_pan=0;
+    
+    	uint8_t diff = value - last_vol ;
+	uint8_t step = diff/duration;
+	
+    switch(type)
+    {
+      case VOLUME:
+	for(int i = 1; i<=duration; i++)
+	{
+	    delay=1;
+	    handle_delay(out);
+	    
+	    putc(midi_status_control_change(tracknum), out);
+            putc(0x07, out); //TODO: unsure whether using expression instead of volume change
+            putc((last_vol+step*i)&0x7f, out);
+
+            tracksz[tracknum]+=3;
+	}
+	
+	last_vol = value;
+	break;
+      case PAN:
+	for(int i = 1; i<=duration; i++)
+	{
+	    delay=1;
+	    handle_delay(out);
+	    
+            putc(midi_status_control_change(tracknum), out);
+            putc(0x0A, out);
+            putc((last_pan+step*i)&0x7f, out);
+
+            tracksz[tracknum]+=3;
+	}
+	
+	last_pan = value;
+	break;
+    }
+    
+    delay=0;
+}
+
 int parse_ev(FILE * in, FILE * out)
 {
     unsigned char ev = getc(in);
