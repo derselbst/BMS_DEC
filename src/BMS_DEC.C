@@ -385,6 +385,7 @@ int parse_ev(FILE * in, FILE * out)
         else
         {
             puts("PPQN already set and not supported as change event. Ignoring it.");
+            fseek(in,2,SEEK_CUR);
         }
     }
     else if(ev==0xFF) return BR_FF;
