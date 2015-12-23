@@ -1,11 +1,13 @@
 #include <stdio.h>
 #include <stdint.h>
 
+#define TRACKS 16
+
 unsigned char notes[8];
 unsigned char tracknum=0;
 int delay=0;
 int basedelay=0;
-int tracksz[16]= {0};
+unsigned int tracksz[TRACKS]= {0};
 int savepos=0;
 int inmain=1;
 
@@ -17,6 +19,12 @@ enum branch
     BR_NORMAL,
     BR_C1,
     BR_FF
+};
+
+enum ctrl_type
+{
+    VOLUME,
+    PAN
 };
 
 unsigned char midi_status_note_on(unsigned char chan)
@@ -125,51 +133,94 @@ void handle_delay(FILE * out)
         write_var_len(delay,out);
         tracksz[tracknum]+=4;
     }
-    
+
     delay=0;
 }
 
-void write_ctrl_interpolation(const ctrl_type, uint8_t const value, uint8_t const duration, FILE* out)
+void write_volume(uint8_t vol, FILE* out)
 {
-    static uint8_t last_vol=0;
-    static uint8_t last_pan=0;
-    
-    	uint8_t diff = value - last_vol ;
-	uint8_t step = diff/duration;
-	
+    handle_delay(out);
+
+    putc(midi_status_control_change(tracknum), out);
+    putc(0x07, out); //TODO: unsure whether using expression instead of volume change
+    putc(vol&0x7f, out);
+
+    tracksz[tracknum]+=3;
+}
+
+void write_pan(uint8_t pan, FILE*out)
+{
+    handle_delay(out);
+
+    putc(midi_status_control_change(tracknum), out);
+    putc(0x0A, out);
+    putc(pan&0x7f, out);
+
+    tracksz[tracknum]+=3;
+}
+
+void write_ctrl_interpolation(enum ctrl_type type, uint8_t const value, uint8_t duration, FILE* out)
+{
+    static uint8_t last_vol[TRACKS]= {0};
+    static uint8_t last_pan[TRACKS]= {0};
+
+
+    duration= duration == 0 ? 1 : duration;
+
     switch(type)
     {
-      case VOLUME:
-	for(int i = 1; i<=duration; i++)
-	{
-	    delay=1;
-	    handle_delay(out);
-	    
-	    putc(midi_status_control_change(tracknum), out);
-            putc(0x07, out); //TODO: unsure whether using expression instead of volume change
-            putc((last_vol+step*i)&0x7f, out);
+    case VOLUME:
+    {
+        uint8_t& oldvol = last_vol[tracknum];
+        int8_t diff = value - oldvol;
 
-            tracksz[tracknum]+=3;
-	}
-	
-	last_vol = value;
-	break;
-      case PAN:
-	for(int i = 1; i<=duration; i++)
-	{
-	    delay=1;
-	    handle_delay(out);
-	    
-            putc(midi_status_control_change(tracknum), out);
-            putc(0x0A, out);
-            putc((last_pan+step*i)&0x7f, out);
+        if(diff==0)
+        {
+            // noting to do
+            break;
+        }
+        float step = diff/duration;
 
-            tracksz[tracknum]+=3;
-	}
-	
-	last_pan = value;
-	break;
+        // write volume change interpolation step by step
+        for(float i = oldvol+step; (oldvol<value) ? (i<value) : (i>value); i+=step)
+        {
+            write_volume((uint8_t)i, out);
+            delay=1;
+        }
+        // write final volume state
+        write_volume((uint8_t)value, out);
+
+
+        oldvol = value;
     }
+    break;
+    case PAN:
+    {
+        uint8_t& oldpan = last_pan[tracknum];
+        int8_t diff = value - oldpan;
+
+        if(diff==0)
+        {
+            // noting to do
+            break;
+        }
+        float step = diff/duration;
+
+        // write pan position change interpolation step by step
+        for(float i = oldpan+step; (oldpan<value) ? (i<value) : (i>value); i+=step)
+        {
+            write_pan((uint8_t)i, out);
+            delay=1;
+        }
+        // write final pan position state
+        write_pan((uint8_t)value, out);
+
+        oldpan = value;
+    }
+    break;
+    }
+
+    delay=0;
 }
 
 int parse_ev(FILE * in, FILE * out)
@@ -223,8 +274,6 @@ int parse_ev(FILE * in, FILE * out)
 
         if(ev==0x03) // pan position change event!
         {
-            handle_delay(out);
-
             // from 00 (fully left) to 7F (fully right pan)
             unsigned char pan_position = getc(in);
 
@@ -236,11 +285,7 @@ int parse_ev(FILE * in, FILE * out)
                 printf("pan position change duration in track %u is: %u\n", tracknum, duration);
             }
 
-            putc(midi_status_control_change(tracknum), out);
-            putc(0x0A, out);
-            putc(pan_position&0x7f, out);
-
-            tracksz[tracknum]+=3;
+            write_ctrl_interpolation(PAN, pan_position, duration, out);
         }
         else
         {
@@ -253,8 +298,6 @@ int parse_ev(FILE * in, FILE * out)
 
         if(ev==0x00) // volume change! (used BlueDemo.bms (=Bogmire Intro) and Title to verify)
         {
-            handle_delay(out);
-
             // this can be compared to what "Expression" in MIDI is used for, dont know wether there is another preamp volume event in BMS
             // up to 7F!
             unsigned char volume = getc(in);
@@ -267,11 +310,7 @@ int parse_ev(FILE * in, FILE * out)
                 printf("volume change duration in track %u is: %u\n", tracknum, duration);
             }
 
-            putc(midi_status_control_change(tracknum), out);
-            putc(0x07, out); //TODO: unsure whether using expression instead of volume change
-            putc(volume&0x7f, out);
-
-            tracksz[tracknum]+=3;
+            write_ctrl_interpolation(VOLUME, volume, duration, out);
         }
         else if(ev==0x09) // vibrato intensity event? pitch sensitivity event??
         {
@@ -476,9 +515,9 @@ int main(int argc, char ** argv)
                 fseek(fp,savepos,SEEK_SET);
                 tracknum++;
 
-                if(tracknum > 16)
+                if(tracknum > TRACKS)
                 {
-                    fprintf(stderr, "Error: BMS contains more than 16 tracks! Exiting.");
+                    fprintf(stderr, "Error: BMS contains more than TRACKS tracks! Exiting.");
                     return -1;
                 }
 
