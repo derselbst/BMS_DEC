@@ -159,6 +159,24 @@ void write_pan(uint8_t pan, FILE*out)
     tracksz[tracknum]+=3;
 }
 
+void write_bank(uint16_t bank, FILE*out)
+{
+    handle_delay(out);
+    
+    putc(midi_status_control_change(tracknum), out);
+    putc(0x0, out); // bank coarse
+    putc(bank/128, out);
+    
+    
+    handle_delay(out);
+    
+    putc(midi_status_control_change(tracknum), out);
+    putc(0x20, out); // bank fine
+    putc(bank%128, out);
+
+    tracksz[tracknum]+=6;
+}
+
 void write_ctrl_interpolation(enum ctrl_type type, uint8_t const value, uint8_t duration, FILE* out)
 {
     static uint8_t last_vol[TRACKS]= {0};
@@ -398,8 +416,10 @@ int parse_ev(FILE * in, FILE * out)
                 tracksz[tracknum]+=2;
             }
             else if(ev==0x20) // bank selection (pretty sure)
-            {
+            {      
                 unsigned char bank = getc(in);
+		
+		write_bank(bank, out);
             }
             else if(ev==0x07)
             {
