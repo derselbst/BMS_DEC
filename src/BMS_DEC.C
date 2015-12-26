@@ -240,236 +240,305 @@ int parse_ev(FILE * in, FILE * out)
 
         tracksz[tracknum]+=3;
     }
-    else if(ev==0x80)
+    else
     {
-        if(inmain==1) basedelay+=getc(in);
-        else delay+=getc(in);
-    }
-    else if(ev<0x88) // note off
-    {
-        handle_delay(out);
-
-        putc(midi_status_note_off(tracknum),out);
-        unsigned char note = notes[ev&7];
-        putc(note,out);
-        putc(0,out);
-
-        tracksz[tracknum]+=3;
-    }
-    else if(ev==0x88)
-    {
-        if(inmain==1)
+        switch(ev)
         {
-            basedelay += (getc(in)<<8) + getc(in);
-        }
-        else
-        {
-            delay += (getc(in)<<8) + getc(in);
-        }
-    }
-    else if(ev==0x98) fseek(in,2,SEEK_CUR);
-    else if(ev==0x9A)
-    {
-        ev = getc(in);
-
-        if(ev==0x03) // pan position change event!
-        {
-            // from 00 (fully left) to 7F (fully right pan)
-            unsigned char pan_position = getc(in);
-
-            // usually 0x0A
-            unsigned char duration = getc(in);
-
-            if(duration!=0)
-            {
-                printf("pan position change duration in track %u is: %u\n", tracknum, duration);
-            }
-
-            write_ctrl_interpolation(PAN, pan_position, duration, out);
-        }
-        else
-        {
-            fseek(in,2,SEEK_CUR);
-        }
-    }
-    else if(ev==0x9C)
-    {
-        ev = getc(in);
-
-        if(ev==0x00) // volume change! (used BlueDemo.bms (=Bogmire Intro) and Title to verify)
-        {
-            // this can be compared to what "Expression" in MIDI is used for, dont know wether there is another preamp volume event in BMS
-            // up to 7F!
-            unsigned char volume = getc(in);
-
-            // usually 0x00
-            unsigned char duration = getc(in);
-
-            if(duration!=0)
-            {
-                printf("volume change duration in track %u is: %u\n", tracknum, duration);
-            }
-
-            write_ctrl_interpolation(VOLUME, volume, duration, out);
-        }
-        else if(ev==0x09) // vibrato intensity event? pitch sensitivity event??
-        {
-            // scale yet unknown
-            unsigned char somethingWithPitch = getc(in);
-
-            // usually 0x00, but can be pretty much anything
-            unsigned char dontknow = getc(in);
-        }
-        else
-        {
-            fseek(in,2,SEEK_CUR);
-        }
-    }
-    else if(ev==0x9E)
-    {
-        ev = getc(in);
-
-        if(ev==0x01) // pitch event
-        {
+        case 0x81:
+        case 0x82:
+        case 0x83:
+        case 0x84:
+        case 0x85:
+        case 0x86:
+        case 0x87:
+        {   // note off
             handle_delay(out);
 
-            int16_t pitch = (getc(in) << 8) | getc(in); // TODO: verify the this is correct byte order
-
-            // usually 0x04
-            unsigned char duration = getc(in);
-
-            if(duration!=0)
-            {
-                printf("pitch change duration in track %u is: %u\n", tracknum, duration);
-            }
-
-            putc(midi_status_pitch_wheel(tracknum), out);
-
-            // TODO: before writing to file, correctly convert pitch value
-            putc(pitch&0x7f,out);
-            putc((pitch>>8)&0x7f,out);
+            putc(midi_status_note_off(tracknum),out);
+            unsigned char note = notes[ev&7];
+            putc(note,out);
+            putc(0,out);
 
             tracksz[tracknum]+=3;
         }
-        else
+        break;
+        case 0x80:
+            if(inmain==1) basedelay+=getc(in);
+            else delay+=getc(in);
+            break;
+        case 0x88:
         {
+            if(inmain==1)
+            {
+                basedelay += (getc(in)<<8) + getc(in);
+            }
+            else
+            {
+                delay += (getc(in)<<8) + getc(in);
+            }
+        }
+        break;
+        case 0xF0:
+        {
+            int value = getc(in);
+            while(value&0x80)
+            {
+                value=(value&0x7F)<<7;
+                value+=getc(in);
+            }
+            if(inmain==1) basedelay += value;
+            else delay += value;
+        }
+        break;
+        case 0x9A:
+        {
+            ev = getc(in);
+
+            if(ev==0x03) // pan position change event!
+            {
+                // from 00 (fully left) to 7F (fully right pan)
+                unsigned char pan_position = getc(in);
+
+                // usually 0x0A
+                unsigned char duration = getc(in);
+
+                if(duration!=0)
+                {
+                    printf("pan position change duration in track %u is: %u\n", tracknum, duration);
+                }
+
+                write_ctrl_interpolation(PAN, pan_position, duration, out);
+            }
+            else
+            {
+                fseek(in,2,SEEK_CUR);
+            }
+        }
+        break;
+        case 0x9C:
+        {
+            ev = getc(in);
+
+            if(ev==0x00) // volume change! (used BlueDemo.bms (=Bogmire Intro) and Title to verify)
+            {
+                // this can be compared to what "Expression" in MIDI is used for, dont know wether there is another preamp volume event in BMS
+                // up to 7F!
+                unsigned char volume = getc(in);
+
+                // usually 0x00
+                unsigned char duration = getc(in);
+
+                if(duration!=0)
+                {
+                    printf("volume change duration in track %u is: %u\n", tracknum, duration);
+                }
+
+                write_ctrl_interpolation(VOLUME, volume, duration, out);
+            }
+            else if(ev==0x09) // vibrato intensity event? pitch sensitivity event??
+            {
+                // scale yet unknown
+                unsigned char somethingWithPitch = getc(in);
+
+                // usually 0x00, but can be pretty much anything
+                unsigned char dontknow = getc(in);
+            }
+            else
+            {
+                fseek(in,2,SEEK_CUR);
+            }
+        }
+        break;
+        case 0x9E:
+        {
+            ev = getc(in);
+
+            if(ev==0x01) // pitch event
+            {
+                handle_delay(out);
+
+                int16_t pitch = (getc(in) << 8) | getc(in); // TODO: verify the this is correct byte order
+
+                // usually 0x04
+                unsigned char duration = getc(in);
+
+                if(duration!=0)
+                {
+                    printf("pitch change duration in track %u is: %u\n", tracknum, duration);
+                }
+
+                putc(midi_status_pitch_wheel(tracknum), out);
+
+                // TODO: before writing to file, correctly convert pitch value
+                putc(pitch&0x7f,out);
+                putc((pitch>>8)&0x7f,out);
+
+                tracksz[tracknum]+=3;
+            }
+            else
+            {
+                fseek(in,3,SEEK_CUR);
+            }
+        }
+        break;
+        case 0xA4:
+        {
+            ev = getc(in);
+
+            if(ev==0x21) // instrument/program change event
+            {
+                handle_delay(out);
+
+                // scale yet unknown
+                unsigned char program = getc(in);
+
+                putc(midi_status_prog_change(tracknum), out);
+                putc(program&0x7f,out);
+
+                tracksz[tracknum]+=2;
+            }
+            else if(ev==0x20) // bank selection (pretty sure)
+            {
+                unsigned char bank = getc(in);
+            }
+            else if(ev==0x07)
+            {
+                //DOnt know
+                fseek(in,1,SEEK_CUR);
+            }
+            else
+            {
+                fseek(in,1,SEEK_CUR);
+            }
+        }
+        break;
+        case 0xB1:
+        {
+            fseek(in,1,SEEK_CUR);
+            int flag = getc(in);
+            if(flag==0x40) fseek(in,2,SEEK_CUR);
+            else if(flag==0x80) fseek(in,4,SEEK_CUR);
+        }
+        break;
+
+        case 0xC2:
+        /*fall through*/
+        case 0xC6:
+        /*fall through*/
+        case 0xCF:
+        /*fall through*/
+        case 0xDA:
+        /*fall through*/
+        case 0xDB:
+        /*fall through*/
+        case 0xE2: // NEW!
+        /*fall through*/
+        case 0xE3: // NEW!
+        /*fall through*/
+        case 0xF1:
+        /*fall through*/
+        case 0xF4:
+            fseek(in,1,SEEK_CUR);
+            break;
+
+        case 0x98:
+        /*fall through*/
+        case 0xA0:
+        /*fall through*/
+        case 0xA3:
+        /*fall through*/
+        case 0xA5:
+        /*fall through*/
+        case 0xA7:
+        /*fall through*/
+        case 0xB8:
+        /*fall through*/
+        case 0xCB:
+        /*fall through*/
+        case 0xCC:
+        /*fall through*/
+        case 0xD0:
+        /*fall through*/
+        case 0xD1:
+        /*fall through*/
+        case 0xD2:
+        /*fall through*/
+        case 0xD5:
+        /*fall through*/
+        case 0xE0:
+        /*fall through*/
+        case 0xE6:
+        /*fall through*/
+        case 0xE7:
+        /*fall through*/
+        case 0xF9:
+            fseek(in,2,SEEK_CUR);
+            break;
+
+        case 0xAC:
+        /*fall through*/
+        case 0xAD:
+        /*fall through*/
+        case 0xC5:
+        /*fall through*/
+        case 0xD8:// NEW!
+        /*fall through*/
+        case 0xDD:
+        /*fall through*/
+        case 0xEF:
             fseek(in,3,SEEK_CUR);
-        }
-    }
-    else if(ev==0xA0) fseek(in,2,SEEK_CUR);
-    else if(ev==0xA3) fseek(in,2,SEEK_CUR);
-    else if(ev==0xA4)
-    {
-        ev = getc(in);
+            break;
 
-        if(ev==0x21) // instrument/program change event
-        {
-            handle_delay(out);
+        case 0xA9:
+        /*fall through*/
+        case 0xAA:
+        /*fall through*/
+        case 0xC4:
+        /*fall through*/
+        case 0xC7:
+        /*fall through*/
+        case 0xC8:
+        /*fall through*/
+        case 0xDF:
+            fseek(in,4,SEEK_CUR);
+            break;
 
-            // scale yet unknown
-            unsigned char program = getc(in);
+        case 0xFD:
+        {
+            // TODO: support tempo change throughout track, not just as initialization
+            if(tempo==0)
+            {
+                tempo = (getc(in)<<8) | getc(in);
+            }
+            else
+            {
+                puts("This BMS is using Tempo Change Events, which is not yet implemented.");
+                fseek(in,2,SEEK_CUR);
+            }
+        }
+        break;
+        case 0xFE:
+        {
+            if(ppqn==0) // unset
+            {
+                ppqn = (getc(in)<<8) | getc(in);
+            }
+            else
+            {
+                puts("PPQN already set and not supported as change event. Ignoring it.");
+                fseek(in,2,SEEK_CUR);
+            }
+        }
+        break;
 
-            putc(midi_status_prog_change(tracknum), out);
-            putc(program&0x7f,out);
-
-            tracksz[tracknum]+=2;
+        case 0xC1:
+            return BR_C1;
+        case 0xFF:
+            return BR_FF;
+        default:
+            printf("Warning: Event %d (0x%X) unhandled\n", ev, ev);
+            break;
         }
-        else if(ev==0x20) // bank selection (pretty sure)
-        {
-            unsigned char bank = getc(in);
-        }
-        else if(ev==0x07)
-        {
-            //DOnt know
-            fseek(in,1,SEEK_CUR);
-        }
-        else
-        {
-            fseek(in,1,SEEK_CUR);
-        }
-    }
-    else if(ev==0xA5) fseek(in,2,SEEK_CUR);
-    else if(ev==0xA7) fseek(in,2,SEEK_CUR);
-    else if(ev==0xA9) fseek(in,4,SEEK_CUR);
-    else if(ev==0xAA) fseek(in,4,SEEK_CUR);
-    else if(ev==0xAC) fseek(in,3,SEEK_CUR);
-    else if(ev==0xAD) fseek(in,3,SEEK_CUR);
-    else if(ev==0xB1)
-    {
-        fseek(in,1,SEEK_CUR);
-        int flag = getc(in);
-        if(flag==0x40) fseek(in,2,SEEK_CUR);
-        else if(flag==0x80) fseek(in,4,SEEK_CUR);
-    }
-    else if(ev==0xB8) fseek(in,2,SEEK_CUR);
-    else if(ev==0xC1) return BR_C1;
-    else if(ev==0xC2) fseek(in,1,SEEK_CUR);
-    else if(ev==0xC4) fseek(in,4,SEEK_CUR);
-    else if(ev==0xC5) fseek(in,3,SEEK_CUR);
-    else if(ev==0xC6) fseek(in,1,SEEK_CUR);
-    else if(ev==0xC7) fseek(in,4,SEEK_CUR);
-    else if(ev==0xC8) fseek(in,4,SEEK_CUR);
-    else if(ev==0xCB) fseek(in,2,SEEK_CUR);
-    else if(ev==0xCC) fseek(in,2,SEEK_CUR);
-    else if(ev==0xCF) fseek(in,1,SEEK_CUR);
-    else if(ev==0xD0) fseek(in,2,SEEK_CUR);
-    else if(ev==0xD1) fseek(in,2,SEEK_CUR);
-    else if(ev==0xD2) fseek(in,2,SEEK_CUR);
-    else if(ev==0xD5) fseek(in,2,SEEK_CUR);
-    else if(ev==0xD8) fseek(in,3,SEEK_CUR); // NEW!
-    else if(ev==0xDA) fseek(in,1,SEEK_CUR);
-    else if(ev==0xDB) fseek(in,1,SEEK_CUR);
-    else if(ev==0xDD) fseek(in,3,SEEK_CUR);
-    else if(ev==0xDF) fseek(in,4,SEEK_CUR);
-    else if(ev==0xE0) fseek(in,2,SEEK_CUR); // WAS 3
-    else if(ev==0xE2) fseek(in,1,SEEK_CUR); // NEW!
-    else if(ev==0xE3) fseek(in,1,SEEK_CUR); // NEW!
-    else if(ev==0xE6) fseek(in,2,SEEK_CUR);
-    else if(ev==0xE7) fseek(in,2,SEEK_CUR);
-    else if(ev==0xEF) fseek(in,3,SEEK_CUR);
-    else if(ev==0xF0)
-    {
-        int value = getc(in);
-        while(value&0x80)
-        {
-            value=(value&0x7F)<<7;
-            value+=getc(in);
-        }
-        if(inmain==1) basedelay += value;
-        else delay += value;
-    }
-    else if(ev==0xF1) fseek(in,1,SEEK_CUR);
-    else if(ev==0xF4) fseek(in,1,SEEK_CUR);
-    else if(ev==0xF9) fseek(in,2,SEEK_CUR);
-    else if(ev==0xFD)
-    {
-        // TODO: support tempo change throughout track, not just as initialization
-        if(tempo==0)
-        {
-            tempo = (getc(in)<<8) | getc(in);
-        }
-        else
-        {
-            puts("This BMS is using Tempo Change Events, which is not yet implemented.");
-            fseek(in,2,SEEK_CUR);
-        }
-    }
-    else if(ev==0xFE)
-    {
-        if(ppqn==0) // unset
-        {
-            ppqn = (getc(in)<<8) | getc(in);
-        }
-        else
-        {
-            puts("PPQN already set and not supported as change event. Ignoring it.");
-            fseek(in,2,SEEK_CUR);
-        }
-    }
-    else if(ev==0xFF) return BR_FF;
-    else
-    {
-        printf("Warning: Event %d (0x%X) unhandled\n", ev, ev);
     }
     return BR_NORMAL;
 }
