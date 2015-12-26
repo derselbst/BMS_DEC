@@ -515,6 +515,13 @@ int parse_ev(FILE * in, FILE * out)
                 puts("This BMS is using Tempo Change Events, which is not yet implemented.");
                 fseek(in,2,SEEK_CUR);
             }
+            
+            if(inmain==1)
+	    puts("tempo change: is in main!");
+	    else
+	      puts("tempo change not in main");
+	    
+	    puts("");
         }
         break;
         case 0xFE:
