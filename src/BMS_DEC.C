@@ -162,14 +162,14 @@ void write_pan(uint8_t pan, FILE*out)
 void write_bank(uint16_t bank, FILE*out)
 {
     handle_delay(out);
-    
+
     putc(midi_status_control_change(tracknum), out);
     putc(0x0, out); // bank coarse
     putc(bank/128, out);
-    
-    
+
+
     handle_delay(out);
-    
+
     putc(midi_status_control_change(tracknum), out);
     putc(0x20, out); // bank fine
     putc(bank%128, out);
@@ -319,12 +319,12 @@ int parse_ev(FILE * in, FILE * out)
 
                 // usually 0x0A
                 unsigned char duration = getc(in);
-
+#ifdef DEBUG
                 if(duration!=0)
                 {
                     printf("pan position change duration in track %u is: %u\n", tracknum, duration);
                 }
-
+#endif
                 write_ctrl_interpolation(PAN, pan_position, duration, out);
             }
             else
@@ -345,12 +345,12 @@ int parse_ev(FILE * in, FILE * out)
 
                 // usually 0x00
                 unsigned char duration = getc(in);
-
+#ifdef DEBUG
                 if(duration!=0)
                 {
                     printf("volume change duration in track %u is: %u\n", tracknum, duration);
                 }
-
+#endif
                 write_ctrl_interpolation(VOLUME, volume, duration, out);
             }
             else if(ev==0x09) // vibrato intensity event? pitch sensitivity event??
@@ -379,12 +379,12 @@ int parse_ev(FILE * in, FILE * out)
 
                 // usually 0x04
                 unsigned char duration = getc(in);
-
+#ifdef DEBUG
                 if(duration!=0)
                 {
                     printf("pitch change duration in track %u is: %u\n", tracknum, duration);
                 }
-
+#endif
                 putc(midi_status_pitch_wheel(tracknum), out);
 
                 // TODO: before writing to file, correctly convert pitch value
@@ -416,10 +416,10 @@ int parse_ev(FILE * in, FILE * out)
                 tracksz[tracknum]+=2;
             }
             else if(ev==0x20) // bank selection (pretty sure)
-            {      
+            {
                 unsigned char bank = getc(in);
-		
-		write_bank(bank, out);
+
+                write_bank(bank, out);
             }
             else if(ev==0x07)
             {
@@ -535,13 +535,13 @@ int parse_ev(FILE * in, FILE * out)
                 puts("This BMS is using Tempo Change Events, which is not yet implemented.");
                 fseek(in,2,SEEK_CUR);
             }
-            
+#ifdef DEBUG
             if(inmain==1)
-	    puts("tempo change: is in main!");
-	    else
-	      puts("tempo change not in main");
-	    
-	    puts("");
+                puts("tempo change: is in main!");
+            else
+                puts("tempo change not in main");
+            puts("");
+#endif
         }
         break;
         case 0xFE:
