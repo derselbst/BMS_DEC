@@ -197,7 +197,7 @@ void write_ctrl_interpolation(enum ctrl_type type, uint8_t const value, uint8_t 
             // noting to do
             break;
         }
-        float step = diff/duration;
+        float step = (float)diff/duration;
 
         // write volume change interpolation step by step
         for(float i = oldvol+step; (oldvol<value) ? (i<value) : (i>value); i+=step)
@@ -222,7 +222,7 @@ void write_ctrl_interpolation(enum ctrl_type type, uint8_t const value, uint8_t 
             // noting to do
             break;
         }
-        float step = diff/duration;
+        float step = (float)diff/duration;
 
         // write pan position change interpolation step by step
         for(float i = oldpan+step; (oldpan<value) ? (i<value) : (i>value); i+=step)
@@ -607,6 +607,7 @@ int main(int argc, char ** argv)
                 putc(0xFF,out);
                 putc(0x2F,out);
                 putc(0,out);
+
                 delay=basedelay;
                 fseek(fp,savepos,SEEK_SET);
                 tracknum++;
