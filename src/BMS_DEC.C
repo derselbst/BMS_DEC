@@ -113,6 +113,15 @@ void write_var_len(unsigned long long value, FILE* out)
 
 void handle_delay(FILE * out)
 {
+  int help=0;
+  
+  if(delay<0)
+  {
+    puts("Delay was negative!");
+    help=delay;
+    delay=0;
+  }
+  
     if(delay<=0x7F)
     {
         write_var_len(delay,out);
@@ -134,7 +143,7 @@ void handle_delay(FILE * out)
         tracksz[tracknum]+=4;
     }
 
-    delay=0;
+    delay=help;
 }
 
 void write_volume(uint8_t vol, FILE* out)
@@ -177,13 +186,12 @@ void write_bank(uint16_t bank, FILE*out)
     tracksz[tracknum]+=6;
 }
 
+// TODO: write all interpolated events to a separate midi track, which overlays the track containing
+// the midi notes, and by that get completly independent of delay handling/fixing issues, see below
 void write_ctrl_interpolation(enum ctrl_type type, uint8_t const value, uint8_t duration, FILE* out)
 {
     static uint8_t last_vol[TRACKS]= {0};
     static uint8_t last_pan[TRACKS]= {0};
-
-
-    duration= duration == 0 ? 1 : duration;
 
     switch(type)
     {
@@ -197,6 +205,8 @@ void write_ctrl_interpolation(enum ctrl_type type, uint8_t const value, uint8_t 
             // noting to do
             break;
         }
+        if(duration>0)
+	{
         float step = (float)diff/duration;
 
         // write volume change interpolation step by step
@@ -205,6 +215,7 @@ void write_ctrl_interpolation(enum ctrl_type type, uint8_t const value, uint8_t 
             write_volume((uint8_t)i, out);
             delay=1;
         }
+	}
         // write final volume state
         write_volume((uint8_t)value, out);
 
@@ -222,6 +233,8 @@ void write_ctrl_interpolation(enum ctrl_type type, uint8_t const value, uint8_t 
             // noting to do
             break;
         }
+        if(duration>0)
+	{
         float step = (float)diff/duration;
 
         // write pan position change interpolation step by step
@@ -230,6 +243,7 @@ void write_ctrl_interpolation(enum ctrl_type type, uint8_t const value, uint8_t 
             write_pan((uint8_t)i, out);
             delay=1;
         }
+	}
         // write final pan position state
         write_pan((uint8_t)value, out);
 
@@ -238,7 +252,9 @@ void write_ctrl_interpolation(enum ctrl_type type, uint8_t const value, uint8_t 
     break;
     }
 
-    delay=0;
+    // all those interpolated events cause a delay in the resulting midi file, that actually doesnt exist
+    // to avoid that follwing events are influenced by that, and thus pushed into "the future", set delay negative
+    delay=-duration;
 }
 
 int parse_ev(FILE * in, FILE * out)
