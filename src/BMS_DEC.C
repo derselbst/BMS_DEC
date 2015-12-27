@@ -591,6 +591,7 @@ int main(int argc, char ** argv)
         if(status==BR_NORMAL);
         else if(status==BR_C1)
         {
+            // this could be the channel for the corresponding track
             fseek(fp,1,SEEK_CUR);
             long offset = (getc(fp)<<16) + (getc(fp)<<8) + getc(fp);
             savepos=ftell(fp);
@@ -614,7 +615,7 @@ int main(int argc, char ** argv)
 
                 if(tracknum > TRACKS)
                 {
-                    fprintf(stderr, "Error: BMS contains more than TRACKS tracks! Exiting.");
+                    fprintf(stderr, "Error: BMS contains more than %d tracks! Exiting.",TRACKS);
                     return -1;
                 }
 
