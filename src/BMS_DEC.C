@@ -1,14 +1,31 @@
 #include <stdio.h>
 #include <stdint.h>
 
-#define TRACKS 16
+// not sure how many track there can be?
+#define TRACKS 255
 
 unsigned char notes[8];
+
+// holds the current track we are handling
 unsigned char tracknum=0;
+
+// on which channel we are currently operating
+uint8_t current_channel=0;
+
+// number of ticks passed since the last event
 int delay=0;
+
+// number of ticks passed since the last event, only used in the main track (i.e. the
+// track containing the tempo and metadata events)
 int basedelay=0;
+
+// contains size of each track in bytes
 unsigned int tracksz[TRACKS]= {0};
+
+// holds the offset where to find the next track in the bms file
 int savepos=0;
+
+// are we in the main track?
 int inmain=1;
 
 uint16_t ppqn=0;
@@ -27,7 +44,7 @@ enum ctrl_type
     PAN
 };
 
-unsigned char midi_status_note_on(unsigned char chan)
+unsigned char midi_status_note_on(unsigned char chan=current_channel)
 {
     // only lower nibble for channel specification
     chan &= 0b00001111;
@@ -37,7 +54,7 @@ unsigned char midi_status_note_on(unsigned char chan)
     return chan;
 }
 
-unsigned char midi_status_note_off(unsigned char chan)
+unsigned char midi_status_note_off(unsigned char chan=current_channel)
 {
     // only lower nibble for channel specification
     chan &= 0b00001111;
@@ -47,7 +64,7 @@ unsigned char midi_status_note_off(unsigned char chan)
     return chan;
 }
 
-unsigned char midi_status_pitch_wheel(unsigned char chan)
+unsigned char midi_status_pitch_wheel(unsigned char chan=current_channel)
 {
     // only lower nibble for channel specification
     chan &= 0b00001111;
@@ -57,7 +74,7 @@ unsigned char midi_status_pitch_wheel(unsigned char chan)
     return chan;
 }
 
-unsigned char midi_status_prog_change(unsigned char chan)
+unsigned char midi_status_prog_change(unsigned char chan=current_channel)
 {
     // only lower nibble for channel specification
     chan &= 0b00001111;
@@ -67,7 +84,7 @@ unsigned char midi_status_prog_change(unsigned char chan)
     return chan;
 }
 
-unsigned char midi_status_control_change(unsigned char chan)
+unsigned char midi_status_control_change(unsigned char chan=current_channel)
 {
     // only lower nibble for channel specification
     chan &= 0b00001111;
@@ -264,7 +281,7 @@ int parse_ev(FILE * in, FILE * out)
     {
         handle_delay(out);
 
-        putc(midi_status_note_on(tracknum),out);
+        putc(midi_status_note_on(),out);
         unsigned char note = ev & 0xFF;
         putc(note,out);
         int ppid = getc(in);
@@ -288,7 +305,7 @@ int parse_ev(FILE * in, FILE * out)
         {   // note off
             handle_delay(out);
 
-            putc(midi_status_note_off(tracknum),out);
+            putc(midi_status_note_off(),out);
             unsigned char note = notes[ev&7];
             putc(note,out);
             putc(0,out);
@@ -401,7 +418,7 @@ int parse_ev(FILE * in, FILE * out)
                     printf("pitch change duration in track %u is: %u\n", tracknum, duration);
                 }
 #endif
-                putc(midi_status_pitch_wheel(tracknum), out);
+                putc(midi_status_pitch_wheel(), out);
 
                 // TODO: before writing to file, correctly convert pitch value
                 putc(pitch&0x7f,out);
@@ -426,7 +443,7 @@ int parse_ev(FILE * in, FILE * out)
                 // scale yet unknown
                 unsigned char program = getc(in);
 
-                putc(midi_status_prog_change(tracknum), out);
+                putc(midi_status_prog_change(), out);
                 putc(program&0x7f,out);
 
                 tracksz[tracknum]+=2;
@@ -608,7 +625,13 @@ int main(int argc, char ** argv)
         else if(status==BR_C1)
         {
             // this could be the channel for the corresponding track
-            fseek(fp,1,SEEK_CUR);
+            current_channel = getc(fp);
+	    if (current_channel >=16)
+	    {
+	      fprintf(stderr, "Error: BMS contains more than 15 channels! Exiting.");
+	      return -1;
+	    }
+	    
             long offset = (getc(fp)<<16) + (getc(fp)<<8) + getc(fp);
             savepos=ftell(fp);
             fseek(fp,offset,SEEK_SET);
