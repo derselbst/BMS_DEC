@@ -4,6 +4,8 @@
 // not sure how many track there can be?
 #define TRACKS 255
 
+#define MAX_CHANNELS 16
+
 unsigned char notes[8];
 
 // holds the current track we are handling
@@ -44,8 +46,18 @@ enum branch
 enum ctrl_type
 {
     VOLUME,
-    PAN
+    PAN,
+    PITCH
 };
+
+typedef struct
+{
+  enum ctrl_type type;
+  int abs_delay;
+  int duration;
+} interpolated_event
+
+std::vector<interpolated_event> interp_events[MAX_CHANNELS]
 
 unsigned char midi_status_note_on(unsigned char chan=current_channel)
 {
@@ -637,7 +649,7 @@ int main(int argc, char ** argv)
         {
             // this could be the channel for the corresponding track
             current_channel = getc(fp);
-	    if (current_channel >=16)
+	    if (current_channel >=MAX_CHANNELS)
 	    {
 	      fprintf(stderr, "Error: BMS contains more than 15 channels! Exiting.");
 	      return -1;
