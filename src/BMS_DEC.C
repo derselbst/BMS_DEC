@@ -277,6 +277,19 @@ void write_ctrl_interpolation(enum ctrl_type type, uint8_t const value, uint8_t 
     delay=-duration;
 }
 
+void update_delay(uint64_t value)
+{
+            if(inmain==1)
+	    {
+	      basedelay+=value;
+	    }
+            else
+	    {
+	      delay+=value;
+	      abs_delay+=value;
+	    }
+}
+
 int parse_ev(FILE * in, FILE * out)
 {
     unsigned char ev = getc(in);
@@ -317,48 +330,24 @@ int parse_ev(FILE * in, FILE * out)
         }
         break;
         case 0x80:
-            if(inmain==1)
-	    {
-	      basedelay+=getc(in);
-	    }
-            else
-	    {
-	      uint8_t d=getc(in);
-	      delay+=d
-	      abs_delay+=d;
-	    }
-            break;
+	  uint8_t d = getc(in);
+	    update_delay(d);
+	break;
         case 0x88:
         {
-            if(inmain==1)
-            {
-                basedelay += (getc(in)<<8) + getc(in);
-            }
-            else
-            {
-	      uint16_t d=(getc(in)<<8) + getc(in);
-                delay += d;
-		abs_delay += d;
-            }
+	  uint16_t d = (getc(in)<<8) + getc(in);
+	  update_delay(d);
         }
         break;
         case 0xF0:
         {
-            int value = getc(in);
+            uint64_t value = getc(in);
             while(value&0x80)
             {
                 value=(value&0x7F)<<7;
                 value+=getc(in);
             }
-            if(inmain==1)
-	    {
-	      basedelay += value;
-	    }
-            else
-	    {
-	      delay += value;
-	      abs_delay += value;
-	    }
+            update_delay(value);
         }
         break;
         case 0x9A:
