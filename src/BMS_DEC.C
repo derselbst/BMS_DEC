@@ -671,6 +671,7 @@ int main(int argc, char ** argv)
                 putc(0x2F,out);
                 putc(0,out);
 
+                abs_delay=0;
                 delay=basedelay;
                 fseek(fp,savepos,SEEK_SET);
                 tracknum++;
