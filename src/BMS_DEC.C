@@ -12,8 +12,11 @@ unsigned char tracknum=0;
 // on which channel we are currently operating
 uint8_t current_channel=0;
 
-// number of ticks passed since the last event
+// relative delay, i.e. number of ticks passed since the last event
 int delay=0;
+
+// absolute delay within a track5
+int abs_delay=0;
 
 // number of ticks passed since the last event, only used in the main track (i.e. the
 // track containing the tempo and metadata events)
@@ -314,8 +317,16 @@ int parse_ev(FILE * in, FILE * out)
         }
         break;
         case 0x80:
-            if(inmain==1) basedelay+=getc(in);
-            else delay+=getc(in);
+            if(inmain==1)
+	    {
+	      basedelay+=getc(in);
+	    }
+            else
+	    {
+	      uint8_t d=getc(in);
+	      delay+=d
+	      abs_delay+=d;
+	    }
             break;
         case 0x88:
         {
@@ -325,7 +336,9 @@ int parse_ev(FILE * in, FILE * out)
             }
             else
             {
-                delay += (getc(in)<<8) + getc(in);
+	      uint16_t d=(getc(in)<<8) + getc(in);
+                delay += d;
+		abs_delay += d;
             }
         }
         break;
@@ -337,8 +350,15 @@ int parse_ev(FILE * in, FILE * out)
                 value=(value&0x7F)<<7;
                 value+=getc(in);
             }
-            if(inmain==1) basedelay += value;
-            else delay += value;
+            if(inmain==1)
+	    {
+	      basedelay += value;
+	    }
+            else
+	    {
+	      delay += value;
+	      abs_delay += value;
+	    }
         }
         break;
         case 0x9A:
