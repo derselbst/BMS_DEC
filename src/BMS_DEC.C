@@ -18,7 +18,7 @@ uint8_t current_channel=0;
 // relative delay, i.e. number of ticks passed since the last event
 int delay=0;
 
-// absolute delay within a track5
+// absolute delay within a track
 int abs_delay=0;
 
 // number of ticks passed since the last event, only used in the main track (i.e. the
@@ -53,8 +53,8 @@ enum ctrl_type
 
 typedef struct
 {
-  int abs_delay;
-  int duration;
+    int abs_delay;
+    int duration;
 } interpolated_event;
 
 std::multimap<enum ctrl_type, interpolated_event> interp_events[MAX_CHANNELS];
@@ -145,15 +145,15 @@ void write_var_len(unsigned long long value, FILE* out)
 
 void handle_delay(FILE * out)
 {
-  int help=0;
-  
-  if(delay<0)
-  {
-    puts("Delay was negative!");
-    help=delay;
-    delay=0;
-  }
-  
+    int help=0;
+
+    if(delay<0)
+    {
+        puts("Delay was negative!");
+        help=delay;
+        delay=0;
+    }
+
     if(delay<=0x7F)
     {
         write_var_len(delay,out);
@@ -238,16 +238,16 @@ void write_ctrl_interpolation(enum ctrl_type type, uint8_t const value, uint8_t 
             break;
         }
         if(duration>0)
-	{
-        float step = (float)diff/duration;
-
-        // write volume change interpolation step by step
-        for(float i = oldvol+step; (oldvol<value) ? (i<value) : (i>value); i+=step)
         {
-            write_volume((uint8_t)i, out);
-            delay=1;
+            float step = (float)diff/duration;
+
+            // write volume change interpolation step by step
+            for(float i = oldvol+step; (oldvol<value) ? (i<value) : (i>value); i+=step)
+            {
+                write_volume((uint8_t)i, out);
+                delay=1;
+            }
         }
-	}
         // write final volume state
         write_volume((uint8_t)value, out);
 
@@ -266,16 +266,16 @@ void write_ctrl_interpolation(enum ctrl_type type, uint8_t const value, uint8_t 
             break;
         }
         if(duration>0)
-	{
-        float step = (float)diff/duration;
-
-        // write pan position change interpolation step by step
-        for(float i = oldpan+step; (oldpan<value) ? (i<value) : (i>value); i+=step)
         {
-            write_pan((uint8_t)i, out);
-            delay=1;
+            float step = (float)diff/duration;
+
+            // write pan position change interpolation step by step
+            for(float i = oldpan+step; (oldpan<value) ? (i<value) : (i>value); i+=step)
+            {
+                write_pan((uint8_t)i, out);
+                delay=1;
+            }
         }
-	}
         // write final pan position state
         write_pan((uint8_t)value, out);
 
@@ -291,15 +291,15 @@ void write_ctrl_interpolation(enum ctrl_type type, uint8_t const value, uint8_t 
 
 void update_delay(uint64_t value)
 {
-            if(inmain==1)
-	    {
-	      basedelay+=value;
-	    }
-            else
-	    {
-	      delay+=value;
-	      abs_delay+=value;
-	    }
+    if(inmain==1)
+    {
+        basedelay+=value;
+    }
+    else
+    {
+        delay+=value;
+        abs_delay+=value;
+    }
 }
 
 int parse_ev(FILE * in, FILE * out)
@@ -342,15 +342,15 @@ int parse_ev(FILE * in, FILE * out)
         }
         break;
         case 0x80:
-	{
-	  uint8_t d = getc(in);
-	    update_delay(d);
-	}
-	break;
+        {
+            uint8_t d = getc(in);
+            update_delay(d);
+        }
+        break;
         case 0x88:
         {
-	  uint16_t d = (getc(in)<<8) + getc(in);
-	  update_delay(d);
+            uint16_t d = (getc(in)<<8) + getc(in);
+            update_delay(d);
         }
         break;
         case 0xF0:
@@ -382,8 +382,8 @@ int parse_ev(FILE * in, FILE * out)
                 }
 #endif
 
-interpolated_event e={ .abs_delay = abs_delay, .duration = duration};
-interp_events[current_channel].insert(std::make_pair(PAN, e));
+                interpolated_event e= { .abs_delay = abs_delay, .duration = duration};
+                interp_events[current_channel].insert(std::make_pair(PAN, e));
 
 //                 write_ctrl_interpolation(PAN, pan_position, duration, out);
             }
@@ -412,8 +412,8 @@ interp_events[current_channel].insert(std::make_pair(PAN, e));
                 }
 #endif
 
-interpolated_event e={ .abs_delay = abs_delay, .duration = duration};
-interp_events[current_channel].insert(std::make_pair(VOLUME, e));
+                interpolated_event e= { .abs_delay = abs_delay, .duration = duration};
+                interp_events[current_channel].insert(std::make_pair(VOLUME, e));
 //                 write_ctrl_interpolation(VOLUME, volume, duration, out);
             }
             else if(ev==0x09) // vibrato intensity event? pitch sensitivity event??
@@ -455,9 +455,9 @@ interp_events[current_channel].insert(std::make_pair(VOLUME, e));
                 putc((pitch>>8)&0x7f,out);
 
                 tracksz[tracknum]+=3;
-		
-interpolated_event e={ .abs_delay = abs_delay, .duration = duration};
-interp_events[current_channel].insert(std::make_pair(PITCH, e));
+
+                interpolated_event e= { .abs_delay = abs_delay, .duration = duration};
+                interp_events[current_channel].insert(std::make_pair(PITCH, e));
             }
             else
             {
@@ -659,12 +659,12 @@ int main(int argc, char ** argv)
         {
             // this could be the channel for the corresponding track
             current_channel = getc(fp);
-	    if (current_channel >=MAX_CHANNELS)
-	    {
-	      fprintf(stderr, "Error: BMS contains more than 15 channels! Exiting.");
-	      return -1;
-	    }
-	    
+            if (current_channel >=MAX_CHANNELS)
+            {
+                fprintf(stderr, "Error: BMS contains more than 15 channels! Exiting.");
+                return -1;
+            }
+
             long offset = (getc(fp)<<16) + (getc(fp)<<8) + getc(fp);
             savepos=ftell(fp);
             fseek(fp,offset,SEEK_SET);
