@@ -330,8 +330,10 @@ int parse_ev(FILE * in, FILE * out)
         }
         break;
         case 0x80:
+	{
 	  uint8_t d = getc(in);
 	    update_delay(d);
+	}
 	break;
         case 0x88:
         {
