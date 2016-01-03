@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdint.h>
+#include <map>
 
 // not sure how many track there can be?
 #define TRACKS 255
@@ -52,12 +53,11 @@ enum ctrl_type
 
 typedef struct
 {
-  enum ctrl_type type;
   int abs_delay;
   int duration;
-} interpolated_event
+} interpolated_event;
 
-std::vector<interpolated_event> interp_events[MAX_CHANNELS]
+std::multimap<enum ctrl_type, interpolated_event> interp_events[MAX_CHANNELS];
 
 unsigned char midi_status_note_on(unsigned char chan=current_channel)
 {
@@ -381,7 +381,11 @@ int parse_ev(FILE * in, FILE * out)
                     printf("pan position change duration in track %u is: %u\n", tracknum, duration);
                 }
 #endif
-                write_ctrl_interpolation(PAN, pan_position, duration, out);
+
+interpolated_event e={ .abs_delay = abs_delay, .duration = duration};
+interp_events[current_channel].insert(std::make_pair(PAN, e));
+
+//                 write_ctrl_interpolation(PAN, pan_position, duration, out);
             }
             else
             {
@@ -407,7 +411,10 @@ int parse_ev(FILE * in, FILE * out)
                     printf("volume change duration in track %u is: %u\n", tracknum, duration);
                 }
 #endif
-                write_ctrl_interpolation(VOLUME, volume, duration, out);
+
+interpolated_event e={ .abs_delay = abs_delay, .duration = duration};
+interp_events[current_channel].insert(std::make_pair(VOLUME, e));
+//                 write_ctrl_interpolation(VOLUME, volume, duration, out);
             }
             else if(ev==0x09) // vibrato intensity event? pitch sensitivity event??
             {
@@ -448,6 +455,9 @@ int parse_ev(FILE * in, FILE * out)
                 putc((pitch>>8)&0x7f,out);
 
                 tracksz[tracknum]+=3;
+		
+interpolated_event e={ .abs_delay = abs_delay, .duration = duration};
+interp_events[current_channel].insert(std::make_pair(PITCH, e));
             }
             else
             {
