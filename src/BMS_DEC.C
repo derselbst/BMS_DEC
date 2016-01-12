@@ -48,12 +48,21 @@ enum ctrl_type
 {
     VOLUME,
     PAN,
-    PITCH
+    //PITCH,
+    MAXCTRL
 };
 
 typedef struct
 {
     int abs_delay;
+
+    // actually we should use a union for value like:
+    // union{
+    // u8 pan, vol;
+    // s16 pitch;
+    // }
+    int16_t value;
+
     int duration;
 } interpolated_event;
 
@@ -178,7 +187,7 @@ void handle_delay(FILE * out)
     delay=help;
 }
 
-void write_volume(uint8_t vol, FILE* out)
+void write_volume(int16_t vol, FILE* out)
 {
     handle_delay(out);
 
@@ -189,7 +198,7 @@ void write_volume(uint8_t vol, FILE* out)
     tracksz[tracknum]+=3;
 }
 
-void write_pan(uint8_t pan, FILE*out)
+void write_pan(int16_t pan, FILE*out)
 {
     handle_delay(out);
 
@@ -220,73 +229,89 @@ void write_bank(uint16_t bank, FILE*out)
 
 // TODO: write all interpolated events to a separate midi track, which overlays the track containing
 // the midi notes, and by that get completly independent of delay handling/fixing issues, see below
-void write_ctrl_interpolation(enum ctrl_type type, uint8_t const value, uint8_t duration, FILE* out)
+void write_ctrl_interpolation(FILE* out)
 {
-    static uint8_t last_vol[TRACKS]= {0};
-    static uint8_t last_pan[TRACKS]= {0};
+    static int16_t last_value[MAXCTRL][MAX_CHANNELS] = {0};
+    static int last_delay[MAXCTRL][MAX_CHANNELS] = {0};
 
-    switch(type)
-    {
-    case VOLUME:
-    {
-        uint8_t& oldvol = last_vol[tracknum];
-        int8_t diff = value - oldvol;
 
-        if(diff==0)
-        {
-            // noting to do
-            break;
-        }
-        if(duration>0)
-        {
-            float step = (float)diff/duration;
+    for (uint8_t chan=0; chan<MAX_CHANNELS; chan++)
+    {// do the interpolation for all channels
+        current_channel=chan;
 
-            // write volume change interpolation step by step
-            for(float i = oldvol+step; (oldvol<value) ? (i<value) : (i>value); i+=step)
+        for(uint8_t type=0; type<MAXCTRL; type++)
+        {// do the interpolation for all controller types
+            void (*write_ctrl)(int16_t, FILE*);
+            switch(static_cast<enum ctrl_type>(type))
             {
-                write_volume((uint8_t)i, out);
-                delay=1;
+            case PAN:
+                write_ctrl=&write_pan;
+                break;
+            case VOLUME:
+                write_ctrl=&write_volume;
+                break;
+//            case PITCH:
+//                write_ctrl=&write_pitch;
+//                break;
             }
-        }
-        // write final volume state
-        write_volume((uint8_t)value, out);
 
-
-        oldvol = value;
-    }
-    break;
-    case PAN:
-    {
-        uint8_t& oldpan = last_pan[tracknum];
-        int8_t diff = value - oldpan;
-
-        if(diff==0)
-        {
-            // noting to do
-            break;
-        }
-        if(duration>0)
-        {
-            float step = (float)diff/duration;
-
-            // write pan position change interpolation step by step
-            for(float i = oldpan+step; (oldpan<value) ? (i<value) : (i>value); i+=step)
+            std::multimap<enum ctrl_type,interpolated_event>::iterator it = interp_events[chan].find(static_cast<enum ctrl_type>(type));
+            if(it==interp_events[chan].end())
             {
-                write_pan((uint8_t)i, out);
-                delay=1;
+                continue;
             }
+
+            // start track
+            tracknum++;
+
+            for(;it!=interp_events[chan].end(); it++)
+            {// finally interpolate every single event
+                int16_t& oldvalue = last_value[type][chan];
+                int16_t value = it->second.value;
+                int16_t diff = value - oldvalue;
+
+                if(diff==0)
+                {
+                    // noting to do
+                    continue;
+                }
+
+                // update relative delay, needed for ctrl-writing-functions
+                delay = it->second.abs_delay - last_delay[type][chan];
+                last_delay[type][chan] = delay;
+
+                int16_t duration = it->second.duration;
+                if(duration>0)
+                {
+                    float step = (float)diff/duration;
+
+                    // write volume change interpolation step by step
+                    for(float i = oldvalue+step; (oldvalue<value) ? (i<value) : (i>value); i+=step)
+                    {
+                        write_ctrl((int16_t)i, out);
+                        delay=1;
+                    }
+                }
+                // write final volume state
+                write_ctrl((int16_t)value, out);
+
+
+                oldvalue = value;
+            }
+
+            // end track
+            // 0 delay
+            write_var_len(0,out);
+            // end of track
+            putc(0xFF,out);
+            putc(0x2F,out);
+            putc(0,out);
+
+            tracksz[tracknum]+=4;
         }
-        // write final pan position state
-        write_pan((uint8_t)value, out);
-
-        oldpan = value;
-    }
-    break;
     }
 
-    // all those interpolated events cause a delay in the resulting midi file, that actually doesnt exist
-    // to avoid that follwing events are influenced by that, and thus pushed into "the future", set delay negative
-    delay=-duration;
+    delay=0;
 }
 
 void update_delay(uint64_t value)
@@ -382,7 +407,7 @@ int parse_ev(FILE * in, FILE * out)
                 }
 #endif
 
-                interpolated_event e= { .abs_delay = abs_delay, .duration = duration};
+                interpolated_event e= { .abs_delay = abs_delay, .value = pan_position, .duration = duration};
                 interp_events[current_channel].insert(std::make_pair(PAN, e));
 
 //                 write_ctrl_interpolation(PAN, pan_position, duration, out);
@@ -412,7 +437,7 @@ int parse_ev(FILE * in, FILE * out)
                 }
 #endif
 
-                interpolated_event e= { .abs_delay = abs_delay, .duration = duration};
+                interpolated_event e= { .abs_delay = abs_delay, .value = volume, .duration = duration};
                 interp_events[current_channel].insert(std::make_pair(VOLUME, e));
 //                 write_ctrl_interpolation(VOLUME, volume, duration, out);
             }
@@ -456,8 +481,8 @@ int parse_ev(FILE * in, FILE * out)
 
                 tracksz[tracknum]+=3;
 
-                interpolated_event e= { .abs_delay = abs_delay, .duration = duration};
-                interp_events[current_channel].insert(std::make_pair(PITCH, e));
+                interpolated_event e= { .abs_delay = abs_delay, .value = pitch, .duration = duration};
+//                interp_events[current_channel].insert(std::make_pair(PITCH, e));
             }
             else
             {
@@ -697,6 +722,9 @@ int main(int argc, char ** argv)
         }
     }
     fclose(fp);
+
+    write_ctrl_interpolation(out);
+
     fclose(out);
 
     FILE * midi_file = fopen(argv[2],"wb");
