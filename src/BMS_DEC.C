@@ -192,7 +192,7 @@ void write_volume(int16_t vol, FILE* out)
 {
     handle_delay(out);
 
-    putc(midi_status_control_change(tracknum), out);
+    putc(midi_status_control_change(), out);
     putc(0x07, out); //TODO: unsure whether using expression instead of volume change
     putc(vol&0x7f, out);
 
@@ -203,7 +203,7 @@ void write_pan(int16_t pan, FILE*out)
 {
     handle_delay(out);
 
-    putc(midi_status_control_change(tracknum), out);
+    putc(midi_status_control_change(), out);
     putc(0x0A, out);
     putc(pan&0x7f, out);
 
@@ -214,14 +214,14 @@ void write_bank(uint16_t bank, FILE*out)
 {
     handle_delay(out);
 
-    putc(midi_status_control_change(tracknum), out);
+    putc(midi_status_control_change(), out);
     putc(0x0, out); // bank coarse
     putc(bank/128, out);
 
 
     handle_delay(out);
 
-    putc(midi_status_control_change(tracknum), out);
+    putc(midi_status_control_change(), out);
     putc(0x20, out); // bank fine
     putc(bank%128, out);
 
