@@ -11,7 +11,7 @@
 unsigned char notes[8];
 
 // holds the current track we are handling
-unsigned char tracknum=0;
+uint16_t tracknum=0;
 
 // on which channel we are currently operating
 uint8_t current_channel=0;
@@ -787,8 +787,8 @@ int main(int argc, char ** argv)
     putc(1,midi_file);
 
     // number of tracks
-    putc(0,midi_file);
-    putc(tracknum,midi_file);
+    putc((tracknum>>8)&0xFF,midi_file);
+    putc(tracknum&0xFF,midi_file);
 
     // ppqn
     if(ppqn==0) // if unset
