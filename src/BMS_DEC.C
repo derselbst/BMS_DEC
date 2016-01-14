@@ -267,6 +267,7 @@ void write_ctrl_interpolation(FILE* out)
             for(;it!=interp_events[current_channel].end() && it->first==type; it++)
             {// finally interpolate every single event
                 int16_t& oldvalue = last_value[type][current_channel];
+		int& olddelay = last_delay[type][current_channel];
                 int16_t value = it->second.value;
                 int16_t diff = value - oldvalue;
 
@@ -277,8 +278,8 @@ void write_ctrl_interpolation(FILE* out)
                 }
 
                 // update global relative delay, needed for ctrl-writing-functions
-                delay = it->second.abs_delay - last_delay[type][current_channel];
-                last_delay[type][current_channel] = it->second.abs_delay;
+                delay = it->second.abs_delay - olddelay;
+                olddelay = it->second.abs_delay;
 
                 int16_t duration = it->second.duration;
 
@@ -315,7 +316,7 @@ void write_ctrl_interpolation(FILE* out)
 			
 			// ok, we inserted an extra midi event, thus also update olddelay, to avoid
 			// that further non-interpolated ctrl-events are pushed into the future
-			last_delay[type][current_channel] += delay;
+			olddelay += delay;
                     }
                 }
                 // write final volume state
