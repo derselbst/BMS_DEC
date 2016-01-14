@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdint.h>
-#include <map>
+#include <iterator> // std::next
+#include <map> // std::multimap
 
 // not sure how many track there can be?
 #define TRACKS 255
@@ -234,10 +235,9 @@ void write_ctrl_interpolation(FILE* out)
     static int16_t last_value[MAXCTRL][MAX_CHANNELS] = {0};
     static int last_delay[MAXCTRL][MAX_CHANNELS] = {0};
 
-
-    for (uint8_t chan=0; chan<MAX_CHANNELS; chan++)
+    // yes, iterate over global variable
+    for (current_channel=0; current_channel<MAX_CHANNELS; current_channel++)
     {// do the interpolation for all channels
-        current_channel=chan;
 
         for(uint8_t type=0; type<MAXCTRL; type++)
         {// do the interpolation for all controller types
@@ -255,8 +255,8 @@ void write_ctrl_interpolation(FILE* out)
 //                break;
             }
 
-            std::multimap<enum ctrl_type,interpolated_event>::iterator it = interp_events[chan].find(static_cast<enum ctrl_type>(type));
-            if(it==interp_events[chan].end())
+            std::multimap<enum ctrl_type,interpolated_event>::iterator it = interp_events[current_channel].find(static_cast<enum ctrl_type>(type));
+            if(it==interp_events[current_channel].end() ||  it->first!=type)
             {
                 continue;
             }
@@ -264,9 +264,9 @@ void write_ctrl_interpolation(FILE* out)
             // start track
             tracknum++;
 
-            for(;it!=interp_events[chan].end(); it++)
+            for(;it!=interp_events[current_channel].end() && it->first==type; it++)
             {// finally interpolate every single event
-                int16_t& oldvalue = last_value[type][chan];
+                int16_t& oldvalue = last_value[type][current_channel];
                 int16_t value = it->second.value;
                 int16_t diff = value - oldvalue;
 
@@ -276,11 +276,33 @@ void write_ctrl_interpolation(FILE* out)
                     continue;
                 }
 
-                // update relative delay, needed for ctrl-writing-functions
-                delay = it->second.abs_delay - last_delay[type][chan];
-                last_delay[type][chan] = delay;
+                // update global relative delay, needed for ctrl-writing-functions
+                delay = it->second.abs_delay - last_delay[type][current_channel];
+                last_delay[type][current_channel] = it->second.abs_delay;
 
                 int16_t duration = it->second.duration;
+
+                {
+                    std::multimap<enum ctrl_type,interpolated_event>::iterator next = std::next(it);
+                    if(next != interp_events[current_channel].end() && next->first==static_cast<enum ctrl_type>(type))
+                    {
+                        int delay_to_next_event = next->second.abs_delay - it->second.abs_delay;
+                        if(delay_to_next_event<0)
+                        {
+                            puts("THIS SHOULD NEVER HAPPEN! delay_to_next_event<0");
+                        }
+                        else
+                        {
+                            // in case the next event arrives before we were able to fully finish the interpolation for this event
+                            if(duration>delay_to_next_event)
+                            {
+                                // interpolate the current event within the time before next event is played
+                                duration=delay_to_next_event;
+                            }
+                        }
+                    }
+                }
+
                 if(duration>0)
                 {
                     float step = (float)diff/duration;
