@@ -135,7 +135,7 @@ unsigned long long to_var_len(unsigned long long value)
     return buffer;
 }
 
-void write_var_len(unsigned long long value, FILE* out)
+void write_var_len(const unsigned long long value, FILE* out)
 {
     unsigned long long buffer = to_var_len(value);
 
@@ -159,7 +159,9 @@ void handle_delay(FILE * out)
 
     if(delay<0)
     {
-        puts("Delay was negative!");
+        puts("THIS SHOULD NEVER HAPPEN! delay<0");
+	
+	// temporarily set delay 0
         help=delay;
         delay=0;
     }
@@ -185,6 +187,7 @@ void handle_delay(FILE * out)
         tracksz[tracknum]+=4;
     }
 
+    // restore any potential negative value
     delay=help;
 }
 
@@ -228,12 +231,35 @@ void write_bank(uint16_t bank, FILE*out)
     tracksz[tracknum]+=6;
 }
 
-// TODO: write all interpolated events to a separate midi track, which overlays the track containing
-// the midi notes, and by that get completly independent of delay handling/fixing issues, see below
+void write_track_end(FILE* out)
+{
+             // 0 delay
+            write_var_len(0,out);
+            // end of track
+            putc(0xFF,out);
+            putc(0x2F,out);
+            putc(0,out);
+
+            tracksz[tracknum]+=4; 
+}
+
+/*
+ * @brief writes all ctrl change events 
+ *
+ * creates all ctrl change events and writes them to temp file. also handles events to be interpolated. 
+ * all those events are written to their corresponding channel, but to a separate midi track, which
+ * overlays the track(s) containing the midi notes. by that we get completely independent of delay handling
+ * issues, that always occurs, when writing interpolated (which actually means additional) events to midi file
+ * that then cause an additional delay (of one tick) that actually doesnt exist. in this case all events would
+ * (mistakenly) be pushed into the future. besides, if we would receive an event before we acutally finished
+ * interpolating another event, we would somehow need to introduce complex merging methods and crap... so lets
+ * better do it that way :-)
+ * 
+ */
 void write_ctrl_interpolation(FILE* out)
 {
-    static int16_t last_value[MAXCTRL][MAX_CHANNELS] = {0};
-    static int last_delay[MAXCTRL][MAX_CHANNELS] = {0};
+    int16_t last_value[MAXCTRL][MAX_CHANNELS] = {0};
+    int last_delay[MAXCTRL][MAX_CHANNELS] = {0};
 
     // yes, iterate over global variable
     for (current_channel=0; current_channel<MAX_CHANNELS; current_channel++)
@@ -256,7 +282,7 @@ void write_ctrl_interpolation(FILE* out)
             }
 
             std::multimap<enum ctrl_type,interpolated_event>::iterator it = interp_events[current_channel].find(static_cast<enum ctrl_type>(type));
-            if(it==interp_events[current_channel].end() ||  it->first!=type)
+            if(it==interp_events[current_channel].end() || it->first!=type)
             {
                 continue;
             }
@@ -283,6 +309,7 @@ void write_ctrl_interpolation(FILE* out)
 
                 int16_t duration = it->second.duration;
 
+		// adjust interpolation duration, if the next event arrives sooner, than we could finish interpolating
                 {
                     std::multimap<enum ctrl_type,interpolated_event>::iterator next = std::next(it);
                     if(next != interp_events[current_channel].end() && next->first==static_cast<enum ctrl_type>(type))
@@ -315,29 +342,22 @@ void write_ctrl_interpolation(FILE* out)
                         delay=1;
 			
 			// ok, we inserted an extra midi event, thus also update olddelay, to avoid
-			// that further non-interpolated ctrl-events are pushed into the future
+			// that further ctrl-events are pushed into the future
 			olddelay += delay;
                     }
                 }
                 // write final volume state
                 write_ctrl((int16_t)value, out);
 
-
                 oldvalue = value;
             }
 
             // end track
-            // 0 delay
-            write_var_len(0,out);
-            // end of track
-            putc(0xFF,out);
-            putc(0x2F,out);
-            putc(0,out);
-
-            tracksz[tracknum]+=4;
+            write_track_end(out);
         }
     }
 
+    // just to be sure
     delay=0;
 }
 
@@ -727,11 +747,7 @@ int main(int argc, char ** argv)
             if(inmain==1) break;
             else
             {
-                tracksz[tracknum]+=4;
-                putc(0,out);
-                putc(0xFF,out);
-                putc(0x2F,out);
-                putc(0,out);
+                write_track_end(out);
 
                 abs_delay=0;
                 delay=basedelay;
@@ -827,12 +843,7 @@ int main(int argc, char ** argv)
             putc((usec_pqn) & 0xFF,midi_file);
         }
 
-        // 0 delay
-        write_var_len(0,midi_file);
-        // end of track
-        putc(0xFF,midi_file);
-        putc(0x2F,midi_file);
-        putc(0,midi_file);
+        write_track_end(midi_file);
     }
 
     for(int i=0; i<tracknum; i++)
