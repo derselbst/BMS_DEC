@@ -312,6 +312,10 @@ void write_ctrl_interpolation(FILE* out)
                     {
                         write_ctrl((int16_t)i, out);
                         delay=1;
+			
+			// ok, we inserted an extra midi event, thus also update olddelay, to avoid
+			// that further non-interpolated ctrl-events are pushed into the future
+			last_delay[type][current_channel] += delay;
                     }
                 }
                 // write final volume state
