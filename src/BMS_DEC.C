@@ -388,6 +388,9 @@ int parse_ev(FILE * in, FILE * out)
         notes[ppid]=note;
         unsigned char vol = getc(in);
         putc(vol,out);
+	
+	if(note==0x58&&current_channel==0xb)
+	{puts("break");}
 
         tracksz[tracknum]+=3;
     }
@@ -584,6 +587,10 @@ int parse_ev(FILE * in, FILE * out)
         case 0xC6:
         /*fall through*/
         case 0xCF:
+        /*fall through*/
+        case 0xD6: // new
+            // seems to be always 0x0
+            // followed by 0xF0 delay event
         /*fall through*/
         case 0xDA:
         /*fall through*/
