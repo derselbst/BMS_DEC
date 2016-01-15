@@ -648,8 +648,6 @@ int parse_ev(FILE * in, FILE * out)
         /*fall through*/
         case 0xD8:// NEW!
         /*fall through*/
-        case 0xDD:
-        /*fall through*/
         case 0xEF:
             fseek(in,3,SEEK_CUR);
             break;
@@ -663,6 +661,10 @@ int parse_ev(FILE * in, FILE * out)
         case 0xC7:
         /*fall through*/
         case 0xC8:
+        /*fall through*/
+        case 0xDD:
+	  // HAHA, not 3 bytes but 4 bytes are followed by 0xDD event
+	  // used LuigiSings.bms to verify (at offset 0x1A0)
         /*fall through*/
         case 0xDF:
             fseek(in,4,SEEK_CUR);
