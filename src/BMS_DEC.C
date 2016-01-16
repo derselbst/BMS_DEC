@@ -592,6 +592,9 @@ int parse_ev(FILE * in, FILE * out)
             // seems to be always 0x0
             // followed by 0xF0 delay event
         /*fall through*/
+	case 0xD9:
+	  // LuigiSe.bms
+	/*fall through*/
         case 0xDA:
         /*fall through*/
         case 0xDB:
