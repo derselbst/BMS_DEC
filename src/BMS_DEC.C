@@ -161,7 +161,7 @@ void handle_delay(FILE * out)
     {
         puts("THIS SHOULD NEVER HAPPEN! delay<0");
 
-	// temporarily set delay 0
+        // temporarily set delay 0
         help=delay;
         delay=0;
     }
@@ -233,14 +233,14 @@ void write_bank(uint16_t bank, FILE*out)
 
 void write_track_end(FILE* out)
 {
-             // 0 delay
-            write_var_len(0,out);
-            // end of track
-            putc(0xFF,out);
-            putc(0x2F,out);
-            putc(0,out);
+    // 0 delay
+    write_var_len(0,out);
+    // end of track
+    putc(0xFF,out);
+    putc(0x2F,out);
+    putc(0,out);
 
-            tracksz[tracknum]+=4;
+    tracksz[tracknum]+=4;
 }
 
 /*
@@ -263,15 +263,17 @@ void write_ctrl_interpolation(FILE* out)
 
     // yes, iterate over global variable
     for (current_channel=0; current_channel<MAX_CHANNELS; current_channel++)
-    {// do the interpolation for all channels
+    {
+        // do the interpolation for all channels
 
         for(uint8_t type=0; type<MAXCTRL; type++)
-        {// do the interpolation for all controller types
+        {
+            // do the interpolation for all controller types
             void (*write_ctrl)(int16_t, FILE*);
             switch(static_cast<enum ctrl_type>(type))
             {
             case PAN:
-                write_ctrl=&write_pan;
+                    write_ctrl=&write_pan;
                 break;
             case VOLUME:
                 write_ctrl=&write_volume;
@@ -290,10 +292,11 @@ void write_ctrl_interpolation(FILE* out)
             // start track
             tracknum++;
 
-            for(;it!=interp_events[current_channel].end() && it->first==type; it++)
-            {// finally interpolate every single event
+            for(; it!=interp_events[current_channel].end() && it->first==type; it++)
+            {
+                // finally interpolate every single event
                 int16_t& oldvalue = last_value[type][current_channel];
-		int& olddelay = last_delay[type][current_channel];
+                int& olddelay = last_delay[type][current_channel];
                 int16_t value = it->second.value;
                 int16_t diff = value - oldvalue;
 
@@ -309,7 +312,7 @@ void write_ctrl_interpolation(FILE* out)
 
                 int16_t duration = it->second.duration;
 
-		// adjust interpolation duration, if the next event arrives sooner, than we could finish interpolating
+                // adjust interpolation duration, if the next event arrives sooner, than we could finish interpolating
                 {
                     std::multimap<enum ctrl_type,interpolated_event>::iterator next = std::next(it);
                     if(next != interp_events[current_channel].end() && next->first==static_cast<enum ctrl_type>(type))
@@ -341,9 +344,9 @@ void write_ctrl_interpolation(FILE* out)
                         write_ctrl((int16_t)i, out);
                         delay=1;
 
-			// ok, we inserted an extra midi event, thus also update olddelay, to avoid
-			// that further ctrl-events are pushed into the future
-			olddelay += delay;
+                        // ok, we inserted an extra midi event, thus also update olddelay, to avoid
+                        // that further ctrl-events are pushed into the future
+                        olddelay += delay;
                     }
                 }
                 // write final volume state
@@ -402,7 +405,8 @@ int parse_ev(FILE * in, FILE * out)
         case 0x85:
         case 0x86:
         case 0x87:
-        {   // note off
+        {
+            // note off
             handle_delay(out);
 
             putc(midi_status_note_off(),out);
@@ -586,12 +590,12 @@ int parse_ev(FILE * in, FILE * out)
         case 0xCF:
         /*fall through*/
         case 0xD6: // new
-            // seems to be always 0x0
-            // followed by 0xF0 delay event
+        // seems to be always 0x0
+        // followed by 0xF0 delay event
         /*fall through*/
-	case 0xD9:
-	  // LuigiSe.bms
-	/*fall through*/
+        case 0xD9:
+        // LuigiSe.bms
+        /*fall through*/
         case 0xDA:
         /*fall through*/
         case 0xDB:
@@ -663,8 +667,8 @@ int parse_ev(FILE * in, FILE * out)
         case 0xC8:
         /*fall through*/
         case 0xDD:
-	  // HAHA, not 3 bytes but 4 bytes are followed by 0xDD event
-	  // used LuigiSings.bms to verify (at offset 0x1A0)
+        // HAHA, not 3 bytes but 4 bytes are followed by 0xDD event
+        // used LuigiSings.bms to verify (at offset 0x1A0)
         /*fall through*/
         case 0xDF:
             fseek(in,4,SEEK_CUR);
