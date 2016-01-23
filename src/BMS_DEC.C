@@ -160,7 +160,7 @@ void handle_delay(FILE * out)
     if(delay<0)
     {
         puts("THIS SHOULD NEVER HAPPEN! delay<0");
-	
+
 	// temporarily set delay 0
         help=delay;
         delay=0;
@@ -240,13 +240,13 @@ void write_track_end(FILE* out)
             putc(0x2F,out);
             putc(0,out);
 
-            tracksz[tracknum]+=4; 
+            tracksz[tracknum]+=4;
 }
 
 /*
- * @brief writes all ctrl change events 
+ * @brief writes all ctrl change events
  *
- * creates all ctrl change events and writes them to temp file. also handles events to be interpolated. 
+ * creates all ctrl change events and writes them to temp file. also handles events to be interpolated.
  * all those events are written to their corresponding channel, but to a separate midi track, which
  * overlays the track(s) containing the midi notes. by that we get completely independent of delay handling
  * issues, that always occurs, when writing interpolated (which actually means additional) events to midi file
@@ -254,7 +254,7 @@ void write_track_end(FILE* out)
  * (mistakenly) be pushed into the future. besides, if we would receive an event before we acutally finished
  * interpolating another event, we would somehow need to introduce complex merging methods and crap... so lets
  * better do it that way :-)
- * 
+ *
  */
 void write_ctrl_interpolation(FILE* out)
 {
@@ -340,7 +340,7 @@ void write_ctrl_interpolation(FILE* out)
                     {
                         write_ctrl((int16_t)i, out);
                         delay=1;
-			
+
 			// ok, we inserted an extra midi event, thus also update olddelay, to avoid
 			// that further ctrl-events are pushed into the future
 			olddelay += delay;
@@ -388,9 +388,6 @@ int parse_ev(FILE * in, FILE * out)
         notes[ppid]=note;
         unsigned char vol = getc(in);
         putc(vol,out);
-	
-	if(note==0x58&&current_channel==0xb)
-	{puts("break");}
 
         tracksz[tracknum]+=3;
     }
@@ -761,7 +758,11 @@ int main(int argc, char ** argv)
             {
                 write_track_end(out);
 
-                abs_delay=0;
+                if(basedelay!=0)
+                {
+                    puts("basedelay!=0 when assigning to delay")
+                }
+                abs_delay=basedelay;
                 delay=basedelay;
                 fseek(fp,savepos,SEEK_SET);
                 tracknum++;
