@@ -1,19 +1,26 @@
 #include <stdio.h>
 #include <stdint.h>
+#include <iterator> // std::next
+#include <map> // std::multimap
 
 // not sure how many track there can be?
 #define TRACKS 255
 
+#define MAX_CHANNELS 16
+
 unsigned char notes[8];
 
 // holds the current track we are handling
-unsigned char tracknum=0;
+uint16_t tracknum=0;
 
 // on which channel we are currently operating
 uint8_t current_channel=0;
 
-// number of ticks passed since the last event
+// relative delay, i.e. number of ticks passed since the last event
 int delay=0;
+
+// absolute delay within a track
+int abs_delay=0;
 
 // number of ticks passed since the last event, only used in the main track (i.e. the
 // track containing the tempo and metadata events)
@@ -41,8 +48,26 @@ enum branch
 enum ctrl_type
 {
     VOLUME,
-    PAN
+    PAN,
+    //PITCH,
+    MAXCTRL
 };
+
+typedef struct
+{
+    int abs_delay;
+
+    // actually we should use a union for value like:
+    // union{
+    // u8 pan, vol;
+    // s16 pitch;
+    // }
+    int16_t value;
+
+    int duration;
+} interpolated_event;
+
+std::multimap<enum ctrl_type, interpolated_event> interp_events[MAX_CHANNELS];
 
 unsigned char midi_status_note_on(unsigned char chan=current_channel)
 {
@@ -110,7 +135,7 @@ unsigned long long to_var_len(unsigned long long value)
     return buffer;
 }
 
-void write_var_len(unsigned long long value, FILE* out)
+void write_var_len(const unsigned long long value, FILE* out)
 {
     unsigned long long buffer = to_var_len(value);
 
@@ -130,15 +155,17 @@ void write_var_len(unsigned long long value, FILE* out)
 
 void handle_delay(FILE * out)
 {
-  int help=0;
-  
-  if(delay<0)
-  {
-    puts("Delay was negative!");
-    help=delay;
-    delay=0;
-  }
-  
+    int help=0;
+
+    if(delay<0)
+    {
+        puts("THIS SHOULD NEVER HAPPEN! delay<0");
+	
+	// temporarily set delay 0
+        help=delay;
+        delay=0;
+    }
+
     if(delay<=0x7F)
     {
         write_var_len(delay,out);
@@ -160,25 +187,26 @@ void handle_delay(FILE * out)
         tracksz[tracknum]+=4;
     }
 
+    // restore any potential negative value
     delay=help;
 }
 
-void write_volume(uint8_t vol, FILE* out)
+void write_volume(int16_t vol, FILE* out)
 {
     handle_delay(out);
 
-    putc(midi_status_control_change(tracknum), out);
+    putc(midi_status_control_change(), out);
     putc(0x07, out); //TODO: unsure whether using expression instead of volume change
     putc(vol&0x7f, out);
 
     tracksz[tracknum]+=3;
 }
 
-void write_pan(uint8_t pan, FILE*out)
+void write_pan(int16_t pan, FILE*out)
 {
     handle_delay(out);
 
-    putc(midi_status_control_change(tracknum), out);
+    putc(midi_status_control_change(), out);
     putc(0x0A, out);
     putc(pan&0x7f, out);
 
@@ -189,89 +217,161 @@ void write_bank(uint16_t bank, FILE*out)
 {
     handle_delay(out);
 
-    putc(midi_status_control_change(tracknum), out);
+    putc(midi_status_control_change(), out);
     putc(0x0, out); // bank coarse
     putc(bank/128, out);
 
 
     handle_delay(out);
 
-    putc(midi_status_control_change(tracknum), out);
+    putc(midi_status_control_change(), out);
     putc(0x20, out); // bank fine
     putc(bank%128, out);
 
     tracksz[tracknum]+=6;
 }
 
-// TODO: write all interpolated events to a separate midi track, which overlays the track containing
-// the midi notes, and by that get completly independent of delay handling/fixing issues, see below
-void write_ctrl_interpolation(enum ctrl_type type, uint8_t const value, uint8_t duration, FILE* out)
+void write_track_end(FILE* out)
 {
-    static uint8_t last_vol[TRACKS]= {0};
-    static uint8_t last_pan[TRACKS]= {0};
+             // 0 delay
+            write_var_len(0,out);
+            // end of track
+            putc(0xFF,out);
+            putc(0x2F,out);
+            putc(0,out);
 
-    switch(type)
-    {
-    case VOLUME:
-    {
-        uint8_t& oldvol = last_vol[tracknum];
-        int8_t diff = value - oldvol;
+            tracksz[tracknum]+=4; 
+}
 
-        if(diff==0)
-        {
-            // noting to do
-            break;
+/*
+ * @brief writes all ctrl change events 
+ *
+ * creates all ctrl change events and writes them to temp file. also handles events to be interpolated. 
+ * all those events are written to their corresponding channel, but to a separate midi track, which
+ * overlays the track(s) containing the midi notes. by that we get completely independent of delay handling
+ * issues, that always occurs, when writing interpolated (which actually means additional) events to midi file
+ * that then cause an additional delay (of one tick) that actually doesnt exist. in this case all events would
+ * (mistakenly) be pushed into the future. besides, if we would receive an event before we acutally finished
+ * interpolating another event, we would somehow need to introduce complex merging methods and crap... so lets
+ * better do it that way :-)
+ * 
+ */
+void write_ctrl_interpolation(FILE* out)
+{
+    int16_t last_value[MAXCTRL][MAX_CHANNELS] = {0};
+    int last_delay[MAXCTRL][MAX_CHANNELS] = {0};
+
+    // yes, iterate over global variable
+    for (current_channel=0; current_channel<MAX_CHANNELS; current_channel++)
+    {// do the interpolation for all channels
+
+        for(uint8_t type=0; type<MAXCTRL; type++)
+        {// do the interpolation for all controller types
+            void (*write_ctrl)(int16_t, FILE*);
+            switch(static_cast<enum ctrl_type>(type))
+            {
+            case PAN:
+                write_ctrl=&write_pan;
+                break;
+            case VOLUME:
+                write_ctrl=&write_volume;
+                break;
+//            case PITCH:
+//                write_ctrl=&write_pitch;
+//                break;
+            }
+
+            std::multimap<enum ctrl_type,interpolated_event>::iterator it = interp_events[current_channel].find(static_cast<enum ctrl_type>(type));
+            if(it==interp_events[current_channel].end() || it->first!=type)
+            {
+                continue;
+            }
+
+            // start track
+            tracknum++;
+
+            for(;it!=interp_events[current_channel].end() && it->first==type; it++)
+            {// finally interpolate every single event
+                int16_t& oldvalue = last_value[type][current_channel];
+		int& olddelay = last_delay[type][current_channel];
+                int16_t value = it->second.value;
+                int16_t diff = value - oldvalue;
+
+                if(diff==0)
+                {
+                    // noting to do
+                    continue;
+                }
+
+                // update global relative delay, needed for ctrl-writing-functions
+                delay = it->second.abs_delay - olddelay;
+                olddelay = it->second.abs_delay;
+
+                int16_t duration = it->second.duration;
+
+		// adjust interpolation duration, if the next event arrives sooner, than we could finish interpolating
+                {
+                    std::multimap<enum ctrl_type,interpolated_event>::iterator next = std::next(it);
+                    if(next != interp_events[current_channel].end() && next->first==static_cast<enum ctrl_type>(type))
+                    {
+                        int delay_to_next_event = next->second.abs_delay - it->second.abs_delay;
+                        if(delay_to_next_event<0)
+                        {
+                            puts("THIS SHOULD NEVER HAPPEN! delay_to_next_event<0");
+                        }
+                        else
+                        {
+                            // in case the next event arrives before we were able to fully finish the interpolation for this event
+                            if(duration>delay_to_next_event)
+                            {
+                                // interpolate the current event within the time before next event is played
+                                duration=delay_to_next_event;
+                            }
+                        }
+                    }
+                }
+
+                if(duration>0)
+                {
+                    float step = (float)diff/duration;
+
+                    // write volume change interpolation step by step
+                    for(float i = oldvalue+step; (oldvalue<value) ? (i<value) : (i>value); i+=step)
+                    {
+                        write_ctrl((int16_t)i, out);
+                        delay=1;
+			
+			// ok, we inserted an extra midi event, thus also update olddelay, to avoid
+			// that further ctrl-events are pushed into the future
+			olddelay += delay;
+                    }
+                }
+                // write final volume state
+                write_ctrl((int16_t)value, out);
+
+                oldvalue = value;
+            }
+
+            // end track
+            write_track_end(out);
         }
-        if(duration>0)
-	{
-        float step = (float)diff/duration;
-
-        // write volume change interpolation step by step
-        for(float i = oldvol+step; (oldvol<value) ? (i<value) : (i>value); i+=step)
-        {
-            write_volume((uint8_t)i, out);
-            delay=1;
-        }
-	}
-        // write final volume state
-        write_volume((uint8_t)value, out);
-
-
-        oldvol = value;
     }
-    break;
-    case PAN:
+
+    // just to be sure
+    delay=0;
+}
+
+void update_delay(uint64_t value)
+{
+    if(inmain==1)
     {
-        uint8_t& oldpan = last_pan[tracknum];
-        int8_t diff = value - oldpan;
-
-        if(diff==0)
-        {
-            // noting to do
-            break;
-        }
-        if(duration>0)
-	{
-        float step = (float)diff/duration;
-
-        // write pan position change interpolation step by step
-        for(float i = oldpan+step; (oldpan<value) ? (i<value) : (i>value); i+=step)
-        {
-            write_pan((uint8_t)i, out);
-            delay=1;
-        }
-	}
-        // write final pan position state
-        write_pan((uint8_t)value, out);
-
-        oldpan = value;
+        basedelay+=value;
     }
-    break;
+    else
+    {
+        delay+=value;
+        abs_delay+=value;
     }
-
-    // all those interpolated events cause a delay in the resulting midi file, that actually doesnt exist
-    // to avoid that follwing events are influenced by that, and thus pushed into "the future", set delay negative
-    delay=-duration;
 }
 
 int parse_ev(FILE * in, FILE * out)
@@ -288,6 +388,9 @@ int parse_ev(FILE * in, FILE * out)
         notes[ppid]=note;
         unsigned char vol = getc(in);
         putc(vol,out);
+	
+	if(note==0x58&&current_channel==0xb)
+	{puts("break");}
 
         tracksz[tracknum]+=3;
     }
@@ -314,31 +417,26 @@ int parse_ev(FILE * in, FILE * out)
         }
         break;
         case 0x80:
-            if(inmain==1) basedelay+=getc(in);
-            else delay+=getc(in);
-            break;
+        {
+            uint8_t d = getc(in);
+            update_delay(d);
+        }
+        break;
         case 0x88:
         {
-            if(inmain==1)
-            {
-                basedelay += (getc(in)<<8) + getc(in);
-            }
-            else
-            {
-                delay += (getc(in)<<8) + getc(in);
-            }
+            uint16_t d = (getc(in)<<8) + getc(in);
+            update_delay(d);
         }
         break;
         case 0xF0:
         {
-            int value = getc(in);
+            uint64_t value = getc(in);
             while(value&0x80)
             {
                 value=(value&0x7F)<<7;
                 value+=getc(in);
             }
-            if(inmain==1) basedelay += value;
-            else delay += value;
+            update_delay(value);
         }
         break;
         case 0x9A:
@@ -358,7 +456,11 @@ int parse_ev(FILE * in, FILE * out)
                     printf("pan position change duration in track %u is: %u\n", tracknum, duration);
                 }
 #endif
-                write_ctrl_interpolation(PAN, pan_position, duration, out);
+
+                interpolated_event e= { .abs_delay = abs_delay, .value = pan_position, .duration = duration};
+                interp_events[current_channel].insert(std::make_pair(PAN, e));
+
+//                 write_ctrl_interpolation(PAN, pan_position, duration, out);
             }
             else
             {
@@ -384,7 +486,10 @@ int parse_ev(FILE * in, FILE * out)
                     printf("volume change duration in track %u is: %u\n", tracknum, duration);
                 }
 #endif
-                write_ctrl_interpolation(VOLUME, volume, duration, out);
+
+                interpolated_event e= { .abs_delay = abs_delay, .value = volume, .duration = duration};
+                interp_events[current_channel].insert(std::make_pair(VOLUME, e));
+//                 write_ctrl_interpolation(VOLUME, volume, duration, out);
             }
             else if(ev==0x09) // vibrato intensity event? pitch sensitivity event??
             {
@@ -425,6 +530,9 @@ int parse_ev(FILE * in, FILE * out)
                 putc((pitch>>8)&0x7f,out);
 
                 tracksz[tracknum]+=3;
+
+                interpolated_event e= { .abs_delay = abs_delay, .value = pitch, .duration = duration};
+//                interp_events[current_channel].insert(std::make_pair(PITCH, e));
             }
             else
             {
@@ -480,6 +588,13 @@ int parse_ev(FILE * in, FILE * out)
         /*fall through*/
         case 0xCF:
         /*fall through*/
+        case 0xD6: // new
+            // seems to be always 0x0
+            // followed by 0xF0 delay event
+        /*fall through*/
+	case 0xD9:
+	  // LuigiSe.bms
+	/*fall through*/
         case 0xDA:
         /*fall through*/
         case 0xDB:
@@ -536,8 +651,6 @@ int parse_ev(FILE * in, FILE * out)
         /*fall through*/
         case 0xD8:// NEW!
         /*fall through*/
-        case 0xDD:
-        /*fall through*/
         case 0xEF:
             fseek(in,3,SEEK_CUR);
             break;
@@ -551,6 +664,10 @@ int parse_ev(FILE * in, FILE * out)
         case 0xC7:
         /*fall through*/
         case 0xC8:
+        /*fall through*/
+        case 0xDD:
+	  // HAHA, not 3 bytes but 4 bytes are followed by 0xDD event
+	  // used LuigiSings.bms to verify (at offset 0x1A0)
         /*fall through*/
         case 0xDF:
             fseek(in,4,SEEK_CUR);
@@ -626,12 +743,12 @@ int main(int argc, char ** argv)
         {
             // this could be the channel for the corresponding track
             current_channel = getc(fp);
-	    if (current_channel >=16)
-	    {
-	      fprintf(stderr, "Error: BMS contains more than 15 channels! Exiting.");
-	      return -1;
-	    }
-	    
+            if (current_channel >=MAX_CHANNELS)
+            {
+                fprintf(stderr, "Error: BMS contains more than 15 channels! Exiting.");
+                return -1;
+            }
+
             long offset = (getc(fp)<<16) + (getc(fp)<<8) + getc(fp);
             savepos=ftell(fp);
             fseek(fp,offset,SEEK_SET);
@@ -642,12 +759,9 @@ int main(int argc, char ** argv)
             if(inmain==1) break;
             else
             {
-                tracksz[tracknum]+=4;
-                putc(0,out);
-                putc(0xFF,out);
-                putc(0x2F,out);
-                putc(0,out);
+                write_track_end(out);
 
+                abs_delay=0;
                 delay=basedelay;
                 fseek(fp,savepos,SEEK_SET);
                 tracknum++;
@@ -663,6 +777,9 @@ int main(int argc, char ** argv)
         }
     }
     fclose(fp);
+
+    write_ctrl_interpolation(out);
+
     fclose(out);
 
     FILE * midi_file = fopen(argv[2],"wb");
@@ -682,8 +799,8 @@ int main(int argc, char ** argv)
     putc(1,midi_file);
 
     // number of tracks
-    putc(0,midi_file);
-    putc(tracknum,midi_file);
+    putc((tracknum>>8)&0xFF,midi_file);
+    putc(tracknum&0xFF,midi_file);
 
     // ppqn
     if(ppqn==0) // if unset
@@ -738,12 +855,7 @@ int main(int argc, char ** argv)
             putc((usec_pqn) & 0xFF,midi_file);
         }
 
-        // 0 delay
-        write_var_len(0,midi_file);
-        // end of track
-        putc(0xFF,midi_file);
-        putc(0x2F,midi_file);
-        putc(0,midi_file);
+        write_track_end(midi_file);
     }
 
     for(int i=0; i<tracknum; i++)
