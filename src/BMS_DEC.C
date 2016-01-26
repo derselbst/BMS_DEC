@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <stdint.h>
-#include <iterator> // std::next
-#include <map> // std::multimap
+#include <vector>
 
 // not sure how many track there can be?
 #define TRACKS 255
@@ -67,7 +66,7 @@ typedef struct
     int duration;
 } interpolated_event;
 
-std::multimap<enum ctrl_type, interpolated_event> interp_events[MAX_CHANNELS];
+std::vector<interpolated_event> interp_events[MAX_CHANNELS][MAXCTRL]; /* = { { PAN, VOLUME, PITCH }, { PAN, VOLUME, PITCH }, ...MAX_CHANNELS-Times... }; */
 
 unsigned char midi_status_note_on(unsigned char chan=current_channel)
 {
@@ -160,8 +159,8 @@ void handle_delay(FILE * out)
     if(delay<0)
     {
         puts("THIS SHOULD NEVER HAPPEN! delay<0");
-	
-	// temporarily set delay 0
+
+        // temporarily set delay 0
         help=delay;
         delay=0;
     }
@@ -233,20 +232,20 @@ void write_bank(uint16_t bank, FILE*out)
 
 void write_track_end(FILE* out)
 {
-             // 0 delay
-            write_var_len(0,out);
-            // end of track
-            putc(0xFF,out);
-            putc(0x2F,out);
-            putc(0,out);
+    // 0 delay
+    write_var_len(0,out);
+    // end of track
+    putc(0xFF,out);
+    putc(0x2F,out);
+    putc(0,out);
 
-            tracksz[tracknum]+=4; 
+    tracksz[tracknum]+=4;
 }
 
 /*
- * @brief writes all ctrl change events 
+ * @brief writes all ctrl change events
  *
- * creates all ctrl change events and writes them to temp file. also handles events to be interpolated. 
+ * creates all ctrl change events and writes them to temp file. also handles events to be interpolated.
  * all those events are written to their corresponding channel, but to a separate midi track, which
  * overlays the track(s) containing the midi notes. by that we get completely independent of delay handling
  * issues, that always occurs, when writing interpolated (which actually means additional) events to midi file
@@ -254,7 +253,7 @@ void write_track_end(FILE* out)
  * (mistakenly) be pushed into the future. besides, if we would receive an event before we acutally finished
  * interpolating another event, we would somehow need to introduce complex merging methods and crap... so lets
  * better do it that way :-)
- * 
+ *
  */
 void write_ctrl_interpolation(FILE* out)
 {
@@ -263,15 +262,17 @@ void write_ctrl_interpolation(FILE* out)
 
     // yes, iterate over global variable
     for (current_channel=0; current_channel<MAX_CHANNELS; current_channel++)
-    {// do the interpolation for all channels
+    {
+        // do the interpolation for all channels
 
         for(uint8_t type=0; type<MAXCTRL; type++)
-        {// do the interpolation for all controller types
+        {
+            // do the interpolation for all controller types
             void (*write_ctrl)(int16_t, FILE*);
             switch(static_cast<enum ctrl_type>(type))
             {
             case PAN:
-                write_ctrl=&write_pan;
+                    write_ctrl=&write_pan;
                 break;
             case VOLUME:
                 write_ctrl=&write_volume;
@@ -281,8 +282,8 @@ void write_ctrl_interpolation(FILE* out)
 //                break;
             }
 
-            std::multimap<enum ctrl_type,interpolated_event>::iterator it = interp_events[current_channel].find(static_cast<enum ctrl_type>(type));
-            if(it==interp_events[current_channel].end() || it->first!=type)
+std::vector<interpolated_event>& ev = interp_events[current_channel][type];
+            if(ev.empty())
             {
                 continue;
             }
@@ -290,11 +291,12 @@ void write_ctrl_interpolation(FILE* out)
             // start track
             tracknum++;
 
-            for(;it!=interp_events[current_channel].end() && it->first==type; it++)
-            {// finally interpolate every single event
+            for(unsigned int i = 0; i<ev.size(); i++)
+            {
+                // finally interpolate every single event
                 int16_t& oldvalue = last_value[type][current_channel];
-		int& olddelay = last_delay[type][current_channel];
-                int16_t value = it->second.value;
+                int& olddelay = last_delay[type][current_channel];
+                int16_t value = ev[i].value;
                 int16_t diff = value - oldvalue;
 
                 if(diff==0)
@@ -304,17 +306,16 @@ void write_ctrl_interpolation(FILE* out)
                 }
 
                 // update global relative delay, needed for ctrl-writing-functions
-                delay = it->second.abs_delay - olddelay;
-                olddelay = it->second.abs_delay;
+                delay = ev[i].abs_delay - olddelay;
+                olddelay = ev[i].abs_delay;
 
-                int16_t duration = it->second.duration;
+                int16_t duration = ev[i].duration;
 
-		// adjust interpolation duration, if the next event arrives sooner, than we could finish interpolating
+                // adjust interpolation duration, if the next event arrives sooner, than we could finish interpolating
                 {
-                    std::multimap<enum ctrl_type,interpolated_event>::iterator next = std::next(it);
-                    if(next != interp_events[current_channel].end() && next->first==static_cast<enum ctrl_type>(type))
+                    if(i+1<ev.size())
                     {
-                        int delay_to_next_event = next->second.abs_delay - it->second.abs_delay;
+                        int delay_to_next_event = ev[i+1].abs_delay - ev[i].abs_delay;
                         if(delay_to_next_event<0)
                         {
                             puts("THIS SHOULD NEVER HAPPEN! delay_to_next_event<0");
@@ -336,14 +337,14 @@ void write_ctrl_interpolation(FILE* out)
                     float step = (float)diff/duration;
 
                     // write volume change interpolation step by step
-                    for(float i = oldvalue+step; (oldvalue<value) ? (i<value) : (i>value); i+=step)
+                    for(float j = oldvalue+step; (oldvalue<value) ? (j<value) : (j>value); j+=step)
                     {
-                        write_ctrl((int16_t)i, out);
+                        write_ctrl((int16_t)j, out);
                         delay=1;
-			
-			// ok, we inserted an extra midi event, thus also update olddelay, to avoid
-			// that further ctrl-events are pushed into the future
-			olddelay += delay;
+
+                        // ok, we inserted an extra midi event, thus also update olddelay, to avoid
+                        // that further ctrl-events are pushed into the future
+                        olddelay += delay;
                     }
                 }
                 // write final volume state
@@ -388,9 +389,6 @@ int parse_ev(FILE * in, FILE * out)
         notes[ppid]=note;
         unsigned char vol = getc(in);
         putc(vol,out);
-	
-	if(note==0x58&&current_channel==0xb)
-	{puts("break");}
 
         tracksz[tracknum]+=3;
     }
@@ -405,7 +403,8 @@ int parse_ev(FILE * in, FILE * out)
         case 0x85:
         case 0x86:
         case 0x87:
-        {   // note off
+        {
+            // note off
             handle_delay(out);
 
             putc(midi_status_note_off(),out);
@@ -458,7 +457,7 @@ int parse_ev(FILE * in, FILE * out)
 #endif
 
                 interpolated_event e= { .abs_delay = abs_delay, .value = pan_position, .duration = duration};
-                interp_events[current_channel].insert(std::make_pair(PAN, e));
+                interp_events[current_channel][PAN].push_back(e);
 
 //                 write_ctrl_interpolation(PAN, pan_position, duration, out);
             }
@@ -488,7 +487,7 @@ int parse_ev(FILE * in, FILE * out)
 #endif
 
                 interpolated_event e= { .abs_delay = abs_delay, .value = volume, .duration = duration};
-                interp_events[current_channel].insert(std::make_pair(VOLUME, e));
+                interp_events[current_channel][VOLUME].push_back(e);
 //                 write_ctrl_interpolation(VOLUME, volume, duration, out);
             }
             else if(ev==0x09) // vibrato intensity event? pitch sensitivity event??
@@ -589,12 +588,12 @@ int parse_ev(FILE * in, FILE * out)
         case 0xCF:
         /*fall through*/
         case 0xD6: // new
-            // seems to be always 0x0
-            // followed by 0xF0 delay event
+        // seems to be always 0x0
+        // followed by 0xF0 delay event
         /*fall through*/
-	case 0xD9:
-	  // LuigiSe.bms
-	/*fall through*/
+        case 0xD9:
+        // LuigiSe.bms
+        /*fall through*/
         case 0xDA:
         /*fall through*/
         case 0xDB:
@@ -666,8 +665,8 @@ int parse_ev(FILE * in, FILE * out)
         case 0xC8:
         /*fall through*/
         case 0xDD:
-	  // HAHA, not 3 bytes but 4 bytes are followed by 0xDD event
-	  // used LuigiSings.bms to verify (at offset 0x1A0)
+        // HAHA, not 3 bytes but 4 bytes are followed by 0xDD event
+        // used LuigiSings.bms to verify (at offset 0x1A0)
         /*fall through*/
         case 0xDF:
             fseek(in,4,SEEK_CUR);
@@ -761,7 +760,11 @@ int main(int argc, char ** argv)
             {
                 write_track_end(out);
 
-                abs_delay=0;
+                if(basedelay!=0)
+                {
+                    puts("basedelay!=0 when assigning to delay");
+                }
+                abs_delay=basedelay;
                 delay=basedelay;
                 fseek(fp,savepos,SEEK_SET);
                 tracknum++;
@@ -871,7 +874,7 @@ int main(int argc, char ** argv)
         putc((tracksz[i]&0xFF00)>>8,midi_file);
         putc(tracksz[i]&0xFF,midi_file);
 
-        for(int j=0; j<tracksz[i]; j++)
+        for(unsigned int j=0; j<tracksz[i]; j++)
         {
             int w = getc(out);
             putc(w,midi_file);
